@@ -1,9 +1,6 @@
 """LLM client with model routing.
 
-Three specialized functions for three jobs: scoring, reasoning, and drafting.
-Each wraps the OpenAI-compatible API with the right call pattern for its task.
-Works with any provider that speaks the OpenAI chat completions format -
-OpenRouter, Ollama, Together, vLLM, or OpenAI itself.
+Works with any OpenAI-compatible provider: OpenRouter, Ollama, Together, vLLM.
 """
 
 from __future__ import annotations
@@ -18,7 +15,7 @@ def create_client(
     api_key: str,
     default_headers: dict[str, str] | None = None,
 ) -> openai.OpenAI:
-    """Create an OpenAI-compatible client for any provider."""
+    """Create an OpenAI-compatible client."""
     return openai.OpenAI(
         base_url=base_url,
         api_key=api_key,
@@ -27,10 +24,7 @@ def create_client(
 
 
 def score(client: openai.OpenAI, prompt: str, config: ModelConfig) -> str:
-    """Score content relevance. Uses a cheap, fast model.
-
-    Returns the raw model response text. Caller parses the score.
-    """
+    """Single-turn completion. Returns raw response text."""
     response = client.chat.completions.create(
         model=config.model,
         max_tokens=config.max_tokens,
@@ -41,10 +35,10 @@ def score(client: openai.OpenAI, prompt: str, config: ModelConfig) -> str:
 
 
 def reason(client: openai.OpenAI, prompt: str, config: ModelConfig) -> str:
-    """Analyze content with a thinking model.
+    """Single-turn completion with thinking-model fallback.
 
-    Thinking models may put all output in a reasoning field instead of
-    content. This function handles both patterns transparently.
+    Some models (DeepSeek R1, Qwen3) return empty content with output
+    in a separate `reasoning` field. This handles both.
     """
     response = client.chat.completions.create(
         model=config.model,
@@ -53,8 +47,6 @@ def reason(client: openai.OpenAI, prompt: str, config: ModelConfig) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     message = response.choices[0].message
-    # Thinking models sometimes return empty content with reasoning
-    # in a separate field (e.g., DeepSeek R1, Qwen3).
     content = message.content or ""
     if not content and hasattr(message, "reasoning") and message.reasoning:
         content = message.reasoning
@@ -67,12 +59,7 @@ def draft(
     user_prompt: str,
     config: ModelConfig,
 ) -> str:
-    """Generate output with persona identity in the system message.
-
-    The system prompt carries persona identity ("you ARE this person").
-    The user prompt carries the task and any grounding/reasoning context.
-    This separation is what makes persona voice consistent.
-    """
+    """System + user message completion. System carries persona identity."""
     response = client.chat.completions.create(
         model=config.model,
         max_tokens=config.max_tokens,
