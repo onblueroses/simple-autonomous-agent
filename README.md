@@ -61,14 +61,40 @@ print(result.draft)
 
 Three models for three jobs: a 12B for scoring (pennies per thousand calls), a thinking model for analysis, a writer for the actual output.
 
-## Run the example
+## Async
+
+All sync functions have async counterparts with `a`-prefix naming. No new runtime dependencies - `openai>=1.0.0` ships `AsyncOpenAI` and `asyncio` is stdlib.
+
+```python
+from simple_agent import (
+    AsyncPipelineConfig, ModelConfig, acreate_client,
+    load_persona, arun_batch,
+)
+
+client = acreate_client("https://openrouter.ai/api/v1", "your-key")
+
+config = AsyncPipelineConfig(
+    scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
+    reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
+    writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
+    scorer_client=client,
+    writer_client=client,
+)
+
+results = await arun_batch(items, config, max_concurrency=5)
+```
+
+`arun_batch` uses `asyncio.Semaphore` for bounded concurrency instead of `time.sleep` delays. `AsyncPipelineConfig` takes `AsyncOpenAI` clients and an async `ground_fn`.
+
+## Run the examples
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-v1-...   # free at openrouter.ai/keys
-python examples/real_api.py
+python examples/real_api.py              # sync
+python examples/async_real_api.py        # async (3 items concurrently)
 ```
 
-The example demonstrates the full pipeline with DuckDuckGo grounding, persona-voiced drafting, and quality validation. It also includes a quality rules demo that shows how AI writing patterns get caught.
+The sync example demonstrates the full pipeline with DuckDuckGo grounding, persona-voiced drafting, and quality validation. The async example runs a batch of 3 items concurrently.
 
 ## Install
 
@@ -82,9 +108,9 @@ Two dependencies: `openai` and `pyyaml`.
 
 ## Modules
 
-**`llm.py`** - `create_client()`, `score()`, `reason()`, `draft()`. Each function targets a different job. `score()` handles cheap classification, `reason()` handles thinking models that return output in `reasoning`, `reasoning_content`, or `<think>` tags. `draft()` uses system-message identity framing for persona voice. All calls include retry with exponential backoff for rate limits and timeouts.
+**`llm.py`** - `create_client()`, `score()`, `reason()`, `draft()` and their async counterparts (`acreate_client()`, `ascore()`, `areason()`, `adraft()`). Each function targets a different job. `score()` handles cheap classification, `reason()` handles thinking models that return output in `reasoning`, `reasoning_content`, or `<think>` tags. `draft()` uses system-message identity framing for persona voice. All calls include retry with exponential backoff for rate limits and timeouts.
 
-**`pipeline.py`** - `run_pipeline()` wires the stages together with try/except around each one. JSON extraction handles LLM responses wrapped in markdown fences or preamble text. `run_batch()` adds rate limiting and run logging.
+**`pipeline.py`** - `run_pipeline()` wires the stages together with try/except around each one. JSON extraction handles LLM responses wrapped in markdown fences or preamble text. `run_batch()` adds rate limiting and run logging. Async versions `arun_pipeline()` and `arun_batch()` provide the same behavior with semaphore-bounded concurrency.
 
 **`persona.py`** - Loads YAML persona configs. `build_system_prompt()` frames the persona as identity ("You are Marcus Voss...") rather than instruction ("Write like an analyst"). The identity framing produces better voice consistency.
 
@@ -92,7 +118,7 @@ Two dependencies: `openai` and `pyyaml`.
 
 **`state.py`** - SQLite wrapper. Three tables: items (deduplication), drafts (lifecycle), runs (logging). Supports in-memory for testing.
 
-**`config.py`** - Dataclasses. `ModelConfig`, `PipelineConfig`, `PipelineResult`. No env vars, no global state. Prompt templates, retry parameters, and score thresholds are all configurable on `PipelineConfig`.
+**`config.py`** - Dataclasses. `ModelConfig`, `PipelineConfig`, `AsyncPipelineConfig`, `PipelineResult`. No env vars, no global state. Prompt templates, retry parameters, and score thresholds are all configurable.
 
 ## Tests
 
@@ -100,7 +126,7 @@ Two dependencies: `openai` and `pyyaml`.
 python -m pytest tests/ -v
 ```
 
-73 tests, no API keys needed. Pipeline tests use mocked LLM calls.
+96 tests, no API keys needed. Pipeline tests use mocked LLM calls.
 
 ## Configuring prompts
 
