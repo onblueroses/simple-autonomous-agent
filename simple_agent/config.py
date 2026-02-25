@@ -32,6 +32,19 @@ class PipelineConfig:
     quality_rules: list[QualityRule] = field(default_factory=list)
     ground_fn: Callable[[str], str] | None = None
     score_threshold: float = 0.6
+    max_retries: int = 2
+    retry_base_delay: float = 1.0
+    scorer_prompt_template: str = (
+        "Rate the relevance of this content on a scale of 0.0 to 1.0.\n"
+        'Return ONLY a JSON object: {{"score": <float>, "reason": "<brief>"}}\n\n'
+        "Content:\n{content}"
+    )
+    persona_select_prompt_template: str = (
+        "Given this content, which persona should respond?\n"
+        "Available: {personas}\n"
+        'Return ONLY a JSON object: {{"persona": "<name>", "reason": "<brief>"}}\n\n'
+        "Content:\n{content}"
+    )
 
 
 @dataclass

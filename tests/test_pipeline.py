@@ -14,7 +14,7 @@ import pytest
 
 from simple_agent.config import ModelConfig, PipelineConfig, PipelineResult
 from simple_agent.persona import Persona
-from simple_agent.pipeline import run_batch, run_pipeline
+from simple_agent.pipeline import _extract_json, run_batch, run_pipeline
 from simple_agent.quality import default_rules
 from simple_agent.state import StateStore
 
@@ -53,6 +53,36 @@ def _make_config(
 
 
 SAMPLE_ITEM = {"id": "test-1", "text": "What is a good investment yield in 2026?"}
+
+
+class TestExtractJson:
+    def test_clean_json_passthrough(self):
+        raw = '{"score": 0.8, "reason": "relevant"}'
+        assert _extract_json(raw) == raw
+
+    def test_json_fenced_with_language(self):
+        raw = '```json\n{"score": 0.8, "reason": "relevant"}\n```'
+        assert json.loads(_extract_json(raw)) == {"score": 0.8, "reason": "relevant"}
+
+    def test_json_fenced_bare(self):
+        raw = '```\n{"score": 0.8}\n```'
+        assert json.loads(_extract_json(raw)) == {"score": 0.8}
+
+    def test_json_with_preamble(self):
+        raw = 'Here is the result:\n{"score": 0.8, "reason": "good"}'
+        assert json.loads(_extract_json(raw)) == {"score": 0.8, "reason": "good"}
+
+    def test_non_json_passthrough(self):
+        raw = "This is just plain text with no JSON."
+        assert _extract_json(raw) == raw
+
+    def test_nested_json_objects(self):
+        raw = '{"outer": {"inner": 1}, "score": 0.5}'
+        assert json.loads(_extract_json(raw)) == {"outer": {"inner": 1}, "score": 0.5}
+
+    def test_whitespace_around_fences(self):
+        raw = '  ```json\n  {"score": 0.9}  \n```  '
+        assert json.loads(_extract_json(raw)) == {"score": 0.9}
 
 
 class TestRunPipeline:
@@ -154,6 +184,40 @@ class TestRunPipeline:
         drafts = store.get_pending_drafts()
         assert len(drafts) == 1
         store.close()
+
+    def test_fenced_json_score_response(self):
+        config = _make_config(
+            score_response='```json\n{"score": 0.85, "reason": "very relevant"}\n```',
+        )
+        result = run_pipeline(SAMPLE_ITEM, config)
+        assert result.score == 0.85
+        assert result.draft != ""
+
+    def test_custom_scorer_prompt_template(self):
+        custom_template = "Is this about finance? {content}\nReturn JSON: {{\"score\": 1.0}}"
+        mock_scorer = MagicMock()
+        mock_scorer.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content='{"score": 0.9, "reason": "yes"}'))]
+        )
+        mock_writer = MagicMock()
+        mock_writer.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Reasoning.", reasoning=None))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="A draft with enough words to pass validation checks easily here."))]),
+        ]
+        config = PipelineConfig(
+            scorer=ModelConfig(model="test"),
+            reasoner=ModelConfig(model="test"),
+            writer=ModelConfig(model="test"),
+            scorer_client=mock_scorer,
+            writer_client=mock_writer,
+            scorer_prompt_template=custom_template,
+        )
+        result = run_pipeline(SAMPLE_ITEM, config)
+        # Verify the custom prompt was actually used
+        call_args = mock_scorer.chat.completions.create.call_args
+        prompt_used = call_args.kwargs["messages"][0]["content"]
+        assert "Is this about finance?" in prompt_used
+        assert result.score == 0.9
 
     def test_scoring_failure_handled_gracefully(self):
         mock_scorer = MagicMock()
