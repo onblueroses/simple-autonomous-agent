@@ -1,8 +1,8 @@
 # simple-autonomous-agent
 
-~700 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
+~700 lines of Python for wrapping multiple autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
 
-Extracted from a production agent I run daily. Not a framework - just well-structured code you can read in one sitting.
+Simple to use :).
 
 ## How it works
 
@@ -59,7 +59,7 @@ result = run_pipeline(item, config, personas=[persona])
 print(result.draft)
 ```
 
-Three models for three jobs: a 12B for scoring (pennies per thousand calls), a 235B thinker for analysis, a writer for the actual output.
+Three models for three jobs: a 12B for scoring (pennies per thousand calls), a 235B thinker for analysis, a writer for the actual output. Lots of free models for this currently on OpenRouter.
 
 ## Install
 
