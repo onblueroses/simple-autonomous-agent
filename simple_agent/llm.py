@@ -14,6 +14,7 @@ any provider: OpenRouter, Ollama, Together, vLLM.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 
@@ -148,6 +149,106 @@ def draft(
 ) -> str:
     """System + user message completion for persona-voiced generation."""
     response = _retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
+    return response.choices[0].message.content or ""
+
+
+# --- Async counterparts ---
+
+
+async def _async_retry_llm_call(fn, *args, max_retries: int = 2, base_delay: float = 1.0, **kwargs):
+    """Async version of _retry_llm_call. Uses await for the call and asyncio.sleep for backoff."""
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await fn(*args, **kwargs)
+        except _RETRYABLE_ERRORS as e:
+            last_error = e
+            if attempt < max_retries:
+                await asyncio.sleep(base_delay * (2 ** attempt))
+            else:
+                raise
+    raise last_error  # type: ignore[misc]
+
+
+def acreate_client(
+    base_url: str,
+    api_key: str,
+    default_headers: dict[str, str] | None = None,
+) -> openai.AsyncOpenAI:
+    """Create an async OpenAI-compatible client. Constructor is sync."""
+    return openai.AsyncOpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        default_headers=default_headers or {},
+    )
+
+
+async def ascore(
+    client: openai.AsyncOpenAI,
+    prompt: str,
+    config: ModelConfig,
+    max_retries: int = 2,
+    retry_base_delay: float = 1.0,
+) -> str:
+    """Async single-turn completion for classification."""
+    response = await _async_retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[{"role": "user", "content": prompt}],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
+    return response.choices[0].message.content or ""
+
+
+async def areason(
+    client: openai.AsyncOpenAI,
+    prompt: str,
+    config: ModelConfig,
+    max_retries: int = 2,
+    retry_base_delay: float = 1.0,
+) -> str:
+    """Async single-turn completion with thinking-model support."""
+    response = await _async_retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[{"role": "user", "content": prompt}],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
+    message = response.choices[0].message
+    content = message.content or ""
+
+    if content:
+        return _strip_think_tags(content)
+
+    if hasattr(message, "reasoning_content") and message.reasoning_content:
+        return message.reasoning_content
+    if hasattr(message, "reasoning") and message.reasoning:
+        return message.reasoning
+
+    return content
+
+
+async def adraft(
+    client: openai.AsyncOpenAI,
+    system_prompt: str,
+    user_prompt: str,
+    config: ModelConfig,
+    max_retries: int = 2,
+    retry_base_delay: float = 1.0,
+) -> str:
+    """Async system + user message completion for persona-voiced generation."""
+    response = await _async_retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
         temperature=config.temperature,
