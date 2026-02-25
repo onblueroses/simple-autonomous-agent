@@ -1,4 +1,18 @@
-"""Output quality rules and input sanitization."""
+"""Output quality rules and input sanitization.
+
+Why regex over LLM-based quality checks: Quality validation runs on every
+output, so it must be deterministic, instant, and free. Regex rules catch
+the most common AI writing patterns (em dashes, "delve/crucial/landscape",
+exactly-three-item lists, filler openings and closings) without an API call.
+These patterns are empirically the strongest signals of AI authorship - a
+human reader spots them in seconds.
+
+Why sanitize_input matters: When untrusted text (user content, scraped data)
+goes into LLM prompts, prompt injection is a real risk. The sanitization
+strips common injection patterns ("ignore previous instructions", fake XML
+tags, role-switching attempts) before the text reaches any model. It's not
+foolproof, but it catches the obvious attacks.
+"""
 
 from __future__ import annotations
 
