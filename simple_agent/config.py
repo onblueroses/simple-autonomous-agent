@@ -6,9 +6,23 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     import openai
 
     from .quality import QualityRule
+
+_DEFAULT_SCORER_PROMPT = (
+    "Rate the relevance of this content on a scale of 0.0 to 1.0.\n"
+    'Return ONLY a JSON object: {"score": <float>, "reason": "<brief>"}\n\n'
+    "Content:\n{content}"
+)
+_DEFAULT_PERSONA_SELECT_PROMPT = (
+    "Given this content, which persona should respond?\n"
+    "Available: {personas}\n"
+    'Return ONLY a JSON object: {"persona": "<name>", "reason": "<brief>"}\n\n'
+    "Content:\n{content}"
+)
 
 
 @dataclass
@@ -34,17 +48,30 @@ class PipelineConfig:
     score_threshold: float = 0.6
     max_retries: int = 2
     retry_base_delay: float = 1.0
-    scorer_prompt_template: str = (
-        "Rate the relevance of this content on a scale of 0.0 to 1.0.\n"
-        'Return ONLY a JSON object: {"score": <float>, "reason": "<brief>"}\n\n'
-        "Content:\n{content}"
-    )
-    persona_select_prompt_template: str = (
-        "Given this content, which persona should respond?\n"
-        "Available: {personas}\n"
-        'Return ONLY a JSON object: {"persona": "<name>", "reason": "<brief>"}\n\n'
-        "Content:\n{content}"
-    )
+    scorer_prompt_template: str = _DEFAULT_SCORER_PROMPT
+    persona_select_prompt_template: str = _DEFAULT_PERSONA_SELECT_PROMPT
+
+
+@dataclass
+class AsyncPipelineConfig:
+    """Configuration for the async score-ground-reason-draft pipeline.
+
+    Separate from PipelineConfig so the type checker catches a sync client
+    passed to an async pipeline at definition time, not runtime.
+    """
+
+    scorer: ModelConfig
+    reasoner: ModelConfig
+    writer: ModelConfig
+    scorer_client: openai.AsyncOpenAI
+    writer_client: openai.AsyncOpenAI
+    quality_rules: list[QualityRule] = field(default_factory=list)
+    ground_fn: Callable[[str], Awaitable[str]] | None = None
+    score_threshold: float = 0.6
+    max_retries: int = 2
+    retry_base_delay: float = 1.0
+    scorer_prompt_template: str = _DEFAULT_SCORER_PROMPT
+    persona_select_prompt_template: str = _DEFAULT_PERSONA_SELECT_PROMPT
 
 
 @dataclass
