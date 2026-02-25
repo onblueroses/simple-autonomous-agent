@@ -1,8 +1,4 @@
-"""Configuration types for the agent pipeline.
-
-All config is explicit dataclasses - no env var magic, no global state.
-Users instantiate these directly and pass them to pipeline functions.
-"""
+"""Configuration types for the agent pipeline."""
 
 from __future__ import annotations
 
