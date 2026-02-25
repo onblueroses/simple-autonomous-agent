@@ -194,7 +194,7 @@ class TestRunPipeline:
         assert result.draft != ""
 
     def test_custom_scorer_prompt_template(self):
-        custom_template = "Is this about finance? {content}\nReturn JSON: {{\"score\": 1.0}}"
+        custom_template = "Is this about finance? {content}\nReturn JSON: {\"score\": 1.0}"
         mock_scorer = MagicMock()
         mock_scorer.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content='{"score": 0.9, "reason": "yes"}'))]

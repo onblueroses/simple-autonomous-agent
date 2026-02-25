@@ -13,41 +13,6 @@ from simple_agent.config import ModelConfig
 from simple_agent.llm import _retry_llm_call, _strip_think_tags, reason
 
 
-def _mock_client(content="", reasoning=None, reasoning_content=None):
-    """Create a mock OpenAI client with configurable message fields."""
-    client = MagicMock()
-    message = MagicMock()
-    message.content = content
-
-    # Configure hasattr behavior for optional fields
-    attrs = {}
-    if reasoning is not None:
-        attrs["reasoning"] = reasoning
-    if reasoning_content is not None:
-        attrs["reasoning_content"] = reasoning_content
-
-    def mock_hasattr(name):
-        return name in attrs
-
-    # Use spec to control which attributes exist
-    message.reasoning = reasoning
-    message.reasoning_content = reasoning_content
-    message.configure_mock(**attrs)
-
-    # Make hasattr work correctly
-    original_hasattr = type(message).__getattr__
-    def side_effect(name):
-        if name in attrs:
-            return attrs[name]
-        raise AttributeError(name)
-    type(message).__getattr__ = side_effect
-
-    client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message=message)]
-    )
-    return client
-
-
 class TestStripThinkTags:
     def test_no_tags_passthrough(self):
         assert _strip_think_tags("Normal text") == "Normal text"
