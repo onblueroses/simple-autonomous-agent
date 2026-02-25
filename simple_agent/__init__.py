@@ -1,4 +1,4 @@
-"""Multi-model LLM orchestration in ~800 lines."""
+"""Multi-model LLM orchestration in ~750 lines."""
 
 from .config import ModelConfig, PipelineConfig, PipelineResult
 from .llm import create_client, draft, reason, score

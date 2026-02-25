@@ -1,20 +1,8 @@
 """Core orchestration. Wires score-ground-reason-draft with per-stage fault tolerance.
 
-Why per-stage fault tolerance: In a multi-model pipeline, any single stage can
-fail (API timeout, rate limit, malformed response) without invalidating the
-others. If your search API is down, the draft should still happen - just without
-grounding context. If reasoning times out, the writer works without analysis.
-Each stage wraps in try/except and appends to an error list rather than raising.
-
-Why score-first: Scoring is the cheapest operation (small model, short response).
-Running it first filters out irrelevant items before spending tokens on reasoning
-and drafting. At 0.001 cents per score call vs 0.05 cents per draft, this saves
-50x on items that don't pass the threshold.
-
-Why XML tags in prompts: When injecting grounding context and reasoning into the
-draft prompt, XML tags (<analysis>, <research>, <content>) clearly delimit
-trusted context from untrusted user content. This makes the prompt structure
-unambiguous to the model and reduces prompt injection surface.
+Score-first filtering saves ~50x on items that don't pass the threshold (small
+model classification vs full reasoning + drafting). XML tags in prompts delimit
+trusted context from untrusted user content to reduce prompt injection surface.
 """
 
 from __future__ import annotations
@@ -85,7 +73,7 @@ def run_pipeline(
 
     # Score
     try:
-        score_prompt = config.scorer_prompt_template.format(content=text)
+        score_prompt = config.scorer_prompt_template.replace("{content}", text)
         raw_score = llm.score(
             config.scorer_client, score_prompt, config.scorer,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
@@ -107,9 +95,9 @@ def run_pipeline(
     if personas and len(personas) > 1:
         try:
             names = ", ".join(p.name for p in personas)
-            select_prompt = config.persona_select_prompt_template.format(
-                personas=names, content=text,
-            )
+            select_prompt = config.persona_select_prompt_template.replace(
+                "{personas}", names,
+            ).replace("{content}", text)
             raw = llm.score(
                 config.scorer_client, select_prompt, config.scorer,
                 max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,

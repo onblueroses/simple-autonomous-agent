@@ -1,22 +1,4 @@
-"""Persona loading and system prompt construction from YAML configs.
-
-Why YAML over code: Personas are configuration, not logic. A non-developer
-(content writer, domain expert) should be able to create and edit personas
-without touching Python. YAML's structure maps naturally to the persona
-fields: name, identity, voice, expertise, constraints, examples.
-
-Why identity framing over instruction framing: "You are Marcus Voss, an
-investment analyst with 12 years of experience" produces fundamentally
-different output than "Write like an investment analyst." Identity framing
-makes the model adopt the persona's perspective, vocabulary, and judgment
-patterns - not just surface-level stylistic mimicry. The model thinks as
-the persona rather than performing the persona.
-
-Why example_outputs matter: Few-shot examples in the system message prime
-the model's output distribution. Concrete examples with specific numbers,
-named comparisons, and realistic voice patterns are more effective than
-abstract style descriptions. They show rather than tell.
-"""
+"""Persona loading and system prompt construction from YAML configs."""
 
 from __future__ import annotations
 

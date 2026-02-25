@@ -72,20 +72,14 @@ def score(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Single-turn completion for cheap classification tasks.
-
-    Used for scoring (is this item worth processing?) and persona selection
-    (which voice should respond?). These are judgment calls that don't need
-    a 200B model - a 12B model at fraction-of-a-cent pricing handles them fine.
-    """
-    def _call():
-        return client.chat.completions.create(
-            model=config.model,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    response = _retry_llm_call(_call, max_retries=max_retries, base_delay=retry_base_delay)
+    """Single-turn completion for classification (scoring, persona selection)."""
+    response = _retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[{"role": "user", "content": prompt}],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
     return response.choices[0].message.content or ""
 
 
@@ -96,25 +90,18 @@ def reason(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Single-turn completion with thinking-model fallback.
+    """Single-turn completion with thinking-model support.
 
-    Thinking models surface their reasoning in different ways depending on the
-    provider. This function checks three known patterns in order:
-
-    1. Non-empty content - returned as-is (standard models)
-    2. reasoning_content attribute - used by some OpenAI-compatible providers
-    3. reasoning attribute - used by OpenRouter for DeepSeek R1, Qwen3
-    4. <think> tags in content - DeepSeek R1 sometimes wraps reasoning in
-       <think>...</think> tags with the actual answer after the closing tag
+    If content is non-empty, strips <think> tags and returns. If empty, falls
+    back to provider-specific fields: reasoning_content, then reasoning.
     """
-    def _call():
-        return client.chat.completions.create(
-            model=config.model,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    response = _retry_llm_call(_call, max_retries=max_retries, base_delay=retry_base_delay)
+    response = _retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[{"role": "user", "content": prompt}],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
     message = response.choices[0].message
     content = message.content or ""
 
@@ -159,23 +146,15 @@ def draft(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """System + user message completion for persona-voiced generation.
-
-    The system message carries persona identity ("You are Marcus Voss, an
-    investment analyst...") rather than instructions ("Write like an analyst").
-    Identity framing produces more consistent voice - the model adopts the
-    persona's speech patterns, vocabulary, and perspective rather than
-    surface-level stylistic mimicry.
-    """
-    def _call():
-        return client.chat.completions.create(
-            model=config.model,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-    response = _retry_llm_call(_call, max_retries=max_retries, base_delay=retry_base_delay)
+    """System + user message completion for persona-voiced generation."""
+    response = _retry_llm_call(
+        client.chat.completions.create,
+        model=config.model, max_tokens=config.max_tokens,
+        temperature=config.temperature,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_retries=max_retries, base_delay=retry_base_delay,
+    )
     return response.choices[0].message.content or ""
