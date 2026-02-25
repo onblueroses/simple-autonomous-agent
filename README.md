@@ -1,6 +1,6 @@
 # simple-autonomous-agent
 
-~700 lines of Python for wrapping multiple autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
+~750 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
 
 Simple to use :).
 
@@ -45,7 +45,7 @@ client = create_client("https://openrouter.ai/api/v1", "your-key")
 
 config = PipelineConfig(
     scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
-    reasoner=ModelConfig("qwen/qwen3-235b-a22b:free", max_tokens=1024),
+    reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
     writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
     scorer_client=client,
     writer_client=client,
@@ -59,7 +59,16 @@ result = run_pipeline(item, config, personas=[persona])
 print(result.draft)
 ```
 
-Three models for three jobs: a 12B for scoring (pennies per thousand calls), a 235B thinker for analysis, a writer for the actual output. Lots of free models for this currently on OpenRouter.
+Three models for three jobs: a 12B for scoring (pennies per thousand calls), a thinking model for analysis, a writer for the actual output.
+
+## Run the example
+
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-...   # free at openrouter.ai/keys
+python examples/real_api.py
+```
+
+The example demonstrates the full pipeline with DuckDuckGo grounding, persona-voiced drafting, and quality validation. It also includes a quality rules demo that shows how AI writing patterns get caught.
 
 ## Install
 
@@ -73,9 +82,9 @@ Two dependencies: `openai` and `pyyaml`.
 
 ## Modules
 
-**`llm.py`** - `create_client()`, `score()`, `reason()`, `draft()`. Thin wrappers around the OpenAI chat API. `reason()` handles thinking models that return output in a `reasoning` field instead of `content`.
+**`llm.py`** - `create_client()`, `score()`, `reason()`, `draft()`. Each function targets a different job. `score()` handles cheap classification, `reason()` handles thinking models that return output in `reasoning`, `reasoning_content`, or `<think>` tags. `draft()` uses system-message identity framing for persona voice. All calls include retry with exponential backoff for rate limits and timeouts.
 
-**`pipeline.py`** - `run_pipeline()` wires the stages together with try/except around each one. `run_batch()` adds rate limiting and run logging.
+**`pipeline.py`** - `run_pipeline()` wires the stages together with try/except around each one. JSON extraction handles LLM responses wrapped in markdown fences or preamble text. `run_batch()` adds rate limiting and run logging.
 
 **`persona.py`** - Loads YAML persona configs. `build_system_prompt()` frames the persona as identity ("You are Marcus Voss...") rather than instruction ("Write like an analyst"). The identity framing produces better voice consistency.
 
@@ -83,7 +92,7 @@ Two dependencies: `openai` and `pyyaml`.
 
 **`state.py`** - SQLite wrapper. Three tables: items (deduplication), drafts (lifecycle), runs (logging). Supports in-memory for testing.
 
-**`config.py`** - Dataclasses. `ModelConfig`, `PipelineConfig`, `PipelineResult`. No env vars, no global state.
+**`config.py`** - Dataclasses. `ModelConfig`, `PipelineConfig`, `PipelineResult`. No env vars, no global state. Prompt templates, retry parameters, and score thresholds are all configurable on `PipelineConfig`.
 
 ## Tests
 
@@ -91,7 +100,37 @@ Two dependencies: `openai` and `pyyaml`.
 python -m pytest tests/ -v
 ```
 
-48 tests, no API keys needed. Pipeline tests use mocked LLM calls.
+73 tests, no API keys needed. Pipeline tests use mocked LLM calls.
+
+## Configuring prompts
+
+The scorer and persona selection prompts are configurable via `PipelineConfig`:
+
+```python
+config = PipelineConfig(
+    ...,
+    scorer_prompt_template=(
+        "Is this content about finance? Rate 0.0 to 1.0.\n"
+        'Return JSON: {"score": <float>}\n\n{content}'
+    ),
+)
+```
+
+Use `{content}` as placeholder for the input text, `{personas}` for persona names in the selection prompt. Defaults reproduce the built-in prompts.
+
+## Retry and robustness
+
+LLM calls retry automatically on rate limits (429), timeouts, and connection errors. Default: 2 retries with exponential backoff (1s, 2s). Configure via `PipelineConfig`:
+
+```python
+config = PipelineConfig(
+    ...,
+    max_retries=3,        # 0 to disable
+    retry_base_delay=0.5, # seconds
+)
+```
+
+Score parsing handles JSON wrapped in markdown fences or preceded by preamble text. Thinking models are supported across three provider patterns (`reasoning_content`, `reasoning` fields, and `<think>` tags).
 
 ## Personas
 
