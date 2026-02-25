@@ -1,8 +1,26 @@
-"""Core orchestration. Wires score-ground-reason-draft with per-stage fault tolerance."""
+"""Core orchestration. Wires score-ground-reason-draft with per-stage fault tolerance.
+
+Why per-stage fault tolerance: In a multi-model pipeline, any single stage can
+fail (API timeout, rate limit, malformed response) without invalidating the
+others. If your search API is down, the draft should still happen - just without
+grounding context. If reasoning times out, the writer works without analysis.
+Each stage wraps in try/except and appends to an error list rather than raising.
+
+Why score-first: Scoring is the cheapest operation (small model, short response).
+Running it first filters out irrelevant items before spending tokens on reasoning
+and drafting. At 0.001 cents per score call vs 0.05 cents per draft, this saves
+50x on items that don't pass the threshold.
+
+Why XML tags in prompts: When injecting grounding context and reasoning into the
+draft prompt, XML tags (<analysis>, <research>, <content>) clearly delimit
+trusted context from untrusted user content. This makes the prompt structure
+unambiguous to the model and reduces prompt injection surface.
+"""
 
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from . import llm
@@ -10,6 +28,48 @@ from .config import PipelineConfig, PipelineResult
 from .persona import Persona, build_system_prompt
 from .quality import default_rules, sanitize_input, validate_output
 from .state import StateStore
+
+# Regex to match JSON wrapped in triple-backtick fences (```json ... ``` or ``` ... ```)
+_FENCED_JSON_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
+
+
+def _extract_json(text: str) -> str:
+    """Extract JSON from LLM output that may be wrapped in markdown fences or preamble.
+
+    LLMs frequently return JSON in three ways:
+    1. Clean JSON: {"score": 0.8} - pass through unchanged
+    2. Fenced: ```json\n{"score": 0.8}\n``` - strip the fences
+    3. With preamble: "Here's the result:\n{"score": 0.8}" - find the first { and match to }
+
+    Returns the extracted string for json.loads(). If no JSON structure is detected,
+    returns the original text (which will fail at json.loads as before).
+    """
+    text = text.strip()
+
+    # Try fenced extraction first
+    fence_match = _FENCED_JSON_RE.search(text)
+    if fence_match:
+        return fence_match.group(1).strip()
+
+    # If text already starts with { or [, it's probably clean JSON
+    if text.startswith("{") or text.startswith("["):
+        return text
+
+    # Try to find the first JSON object in preamble text
+    brace_idx = text.find("{")
+    if brace_idx != -1:
+        # Find the matching closing brace by counting nesting
+        depth = 0
+        for i in range(brace_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[brace_idx : i + 1]
+
+    # Nothing found - return original (will fail at json.loads, caught by try/except)
+    return text
 
 
 def run_pipeline(
@@ -25,12 +85,12 @@ def run_pipeline(
 
     # Score
     try:
-        score_prompt = (
-            "Rate the relevance of this content on a scale of 0.0 to 1.0.\n"
-            'Return ONLY a JSON object: {"score": <float>, "reason": "<brief>"}\n\n'
-            f"Content:\n{text}"
+        score_prompt = config.scorer_prompt_template.format(content=text)
+        raw_score = llm.score(
+            config.scorer_client, score_prompt, config.scorer,
+            max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
-        parsed = json.loads(llm.score(config.scorer_client, score_prompt, config.scorer))
+        parsed = json.loads(_extract_json(raw_score))
         result.score = float(parsed.get("score", 0.0))
     except Exception as e:
         errors.append(f"scoring: {e}")
@@ -47,14 +107,14 @@ def run_pipeline(
     if personas and len(personas) > 1:
         try:
             names = ", ".join(p.name for p in personas)
-            select_prompt = (
-                f"Given this content, which persona should respond?\n"
-                f"Available: {names}\n"
-                'Return ONLY a JSON object: {"persona": "<name>", "reason": "<brief>"}\n\n'
-                f"Content:\n{text}"
+            select_prompt = config.persona_select_prompt_template.format(
+                personas=names, content=text,
             )
-            raw = llm.score(config.scorer_client, select_prompt, config.scorer)
-            selected_name = json.loads(raw).get("persona", "").lower()
+            raw = llm.score(
+                config.scorer_client, select_prompt, config.scorer,
+                max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
+            )
+            selected_name = json.loads(_extract_json(raw)).get("persona", "").lower()
             selected = next((p for p in personas if p.name.lower() == selected_name), None)
         except Exception as e:
             errors.append(f"persona selection: {e}")
@@ -77,7 +137,10 @@ def run_pipeline(
         if result.grounding:
             reason_parts.append(f"\n<context>\n{result.grounding}\n</context>")
         reason_parts.append(f"\n<content>\n{text}\n</content>")
-        result.reasoning = llm.reason(config.writer_client, "\n".join(reason_parts), config.reasoner)
+        result.reasoning = llm.reason(
+            config.writer_client, "\n".join(reason_parts), config.reasoner,
+            max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
+        )
     except Exception as e:
         errors.append(f"reasoning: {e}")
 
@@ -91,7 +154,10 @@ def run_pipeline(
             user_parts.append(f"<research>\n{result.grounding}\n</research>")
         user_parts.append(f"<content>\n{text}\n</content>")
         user_parts.append("\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above.")
-        result.draft = llm.draft(config.writer_client, system_prompt, "\n".join(user_parts), config.writer)
+        result.draft = llm.draft(
+            config.writer_client, system_prompt, "\n".join(user_parts), config.writer,
+            max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
+        )
     except Exception as e:
         errors.append(f"drafting: {e}")
 
