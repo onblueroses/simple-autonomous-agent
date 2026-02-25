@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple-autonomous-agent"
+version = "0.1.0"
+description = "Multi-model LLM orchestration and output quality engineering in ~500 lines"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["simple_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
