@@ -1,13 +1,3 @@
-"""Tests for the async pipeline orchestration.
-
-Mirrors test_pipeline.py structure with async mocks. Tests focus on:
-- Full async flow producing populated results
-- Score threshold filtering
-- Async grounding integration
-- Fault tolerance (stages failing independently)
-- Batch concurrency and order preservation
-"""
-
 from unittest.mock import AsyncMock, MagicMock
 
 from simple_agent.config import AsyncPipelineConfig, ModelConfig
@@ -22,7 +12,6 @@ def _make_async_config(
     draft_response: str = "The yield at 4.2% is below market average for comparable assets.",
     score_threshold: float = 0.6,
 ) -> AsyncPipelineConfig:
-    """Create an AsyncPipelineConfig with mocked async LLM clients."""
     mock_scorer = MagicMock()
     mock_scorer.chat.completions.create = AsyncMock(
         return_value=MagicMock(choices=[MagicMock(message=MagicMock(content=score_response))])
@@ -55,8 +44,8 @@ class TestArunPipeline:
         result = await arun_pipeline(SAMPLE_ITEM, config)
         assert result.item_id == "test-1"
         assert result.score == 0.8
-        assert result.draft != ""
-        assert result.reasoning != ""
+        assert result.draft == "The yield at 4.2% is below market average for comparable assets."
+        assert result.reasoning == "Core question is about investment returns."
 
     async def test_score_below_threshold_returns_early(self):
         config = _make_async_config(
@@ -135,7 +124,7 @@ class TestArunBatch:
         )
         results = await arun_batch(items, config)
         assert len(results) == 2
-        assert all(r.draft != "" for r in results)
+        assert all(r.draft == "A well-reasoned response with concrete details and specific numbers." for r in results)
 
     async def test_preserves_order(self):
         items = [{"id": f"item-{i}", "text": f"Item {i}"} for i in range(5)]
