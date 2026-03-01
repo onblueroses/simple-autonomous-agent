@@ -18,21 +18,11 @@ from .persona import Persona, build_system_prompt
 from .quality import default_rules, sanitize_input, validate_output
 from .state import StateStore
 
-# Regex to match JSON wrapped in triple-backtick fences (```json ... ``` or ``` ... ```)
 _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
 
 def _extract_json(text: str) -> str:
-    """Extract JSON from LLM output that may be wrapped in markdown fences or preamble.
-
-    LLMs frequently return JSON in three ways:
-    1. Clean JSON: {"score": 0.8} - pass through unchanged
-    2. Fenced: ```json\n{"score": 0.8}\n``` - strip the fences
-    3. With preamble: "Here's the result:\n{"score": 0.8}" - find the first { and match to }
-
-    Returns the extracted string for json.loads(). If no JSON structure is detected,
-    returns the original text (which will fail at json.loads as before).
-    """
+    """Handle fenced, preamble-wrapped, or clean JSON from LLM output."""
     text = text.strip()
 
     # Try fenced extraction first
@@ -113,7 +103,7 @@ def run_pipeline(
     if selected:
         result.persona = selected.name
 
-    # Ground (optional)
+    # Ground
     if config.ground_fn:
         try:
             result.grounding = config.ground_fn(text[:500])
@@ -152,8 +142,8 @@ def run_pipeline(
 
     # Validate
     rules = config.quality_rules or default_rules()
-    passed, reasons = validate_output(result.draft, rules)
-    result.passed_quality = passed
+    reasons = validate_output(result.draft, rules)
+    result.passed_quality = len(reasons) == 0
     errors.extend(reasons)
 
     # Persist
@@ -195,9 +185,6 @@ def run_batch(
         state.finish_run(run_id, len(items), drafts_created, all_errors)
 
     return results
-
-
-# --- Async counterparts ---
 
 
 async def arun_pipeline(
@@ -252,7 +239,7 @@ async def arun_pipeline(
     if selected:
         result.persona = selected.name
 
-    # Ground (optional - async)
+    # Ground
     if config.ground_fn:
         try:
             result.grounding = await config.ground_fn(text[:500])
@@ -291,8 +278,8 @@ async def arun_pipeline(
 
     # Validate (sync - pure CPU)
     rules = config.quality_rules or default_rules()
-    passed, reasons = validate_output(result.draft, rules)
-    result.passed_quality = passed
+    reasons = validate_output(result.draft, rules)
+    result.passed_quality = len(reasons) == 0
     errors.extend(reasons)
 
     # Persist (sync - microsecond SQLite)

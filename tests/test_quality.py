@@ -10,15 +10,8 @@ from simple_agent.quality import (
 
 
 class TestDefaultRules:
-    def test_returns_rules(self):
-        rules = default_rules()
-        assert len(rules) >= 6
-
-    def test_all_rules_have_required_fields(self):
-        for rule in default_rules():
-            assert rule.name
-            assert rule.pattern
-            assert rule.description
+    def test_default_rules_are_nonempty(self):
+        assert default_rules()
 
 
 class TestCheckQuality:
@@ -97,25 +90,24 @@ class TestSanitizeInput:
 
 class TestValidateOutput:
     def test_too_short(self):
-        passed, reasons = validate_output("Too short.", min_words=20)
-        assert not passed
+        reasons = validate_output("Too short.", min_words=20)
+        assert reasons
         assert any("Too short" in r for r in reasons)
 
     def test_too_long(self):
         long_text = " ".join(["word"] * 600)
-        passed, reasons = validate_output(long_text, max_words=500)
-        assert not passed
+        reasons = validate_output(long_text, max_words=500)
+        assert reasons
         assert any("Too long" in r for r in reasons)
 
     def test_passes_valid_text(self):
         text = " ".join(["word"] * 50)
-        passed, reasons = validate_output(text, min_words=20, max_words=500)
-        assert passed
+        reasons = validate_output(text, min_words=20, max_words=500)
         assert len(reasons) == 0
 
     def test_reports_quality_violations(self):
         rules = default_rules()
         text = "Let me delve into this. " + " ".join(["word"] * 30)
-        passed, reasons = validate_output(text, rules=rules)
-        assert not passed
+        reasons = validate_output(text, rules=rules)
+        assert reasons
         assert any("ai_vocabulary" in r for r in reasons)

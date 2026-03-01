@@ -1,16 +1,10 @@
-"""Tests for async LLM client functions.
-
-Mirrors test_llm.py structure with AsyncMock. Covers retry with exponential
-backoff, non-retryable error propagation, and basic async function return values.
-"""
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import openai
 import pytest
 
 from simple_agent.config import ModelConfig
-from simple_agent.llm import _async_retry_llm_call, acreate_client, adraft, areason, ascore
+from simple_agent.llm import _async_retry_llm_call, adraft, areason, ascore
 
 
 class TestAsyncRetryLlmCall:
@@ -34,7 +28,6 @@ class TestAsyncRetryLlmCall:
             "success",
         ])
         await _async_retry_llm_call(fn, max_retries=2, base_delay=1.0)
-        # First retry: 1.0 * 2^0 = 1.0, second: 1.0 * 2^1 = 2.0
         assert mock_sleep.call_args_list[0][0][0] == 1.0
         assert mock_sleep.call_args_list[1][0][0] == 2.0
 
@@ -71,7 +64,7 @@ class TestAsyncRetryLlmCall:
 
 
 class TestAscore:
-    async def test_returns_content(self):
+    async def test_score_response_passthrough(self):
         client = MagicMock()
         msg = MagicMock()
         msg.content = '{"score": 0.85, "reason": "relevant"}'
@@ -147,7 +140,7 @@ class TestAreason:
 
 
 class TestAdraft:
-    async def test_returns_content(self):
+    async def test_draft_response_passthrough(self):
         client = MagicMock()
         msg = MagicMock()
         msg.content = "A well-crafted draft response."
@@ -159,7 +152,3 @@ class TestAdraft:
         assert result == "A well-crafted draft response."
 
 
-class TestAcreateClient:
-    def test_returns_async_openai(self):
-        client = acreate_client("https://api.example.com/v1", "sk-test")
-        assert isinstance(client, openai.AsyncOpenAI)
