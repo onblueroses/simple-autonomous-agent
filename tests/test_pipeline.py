@@ -10,9 +10,7 @@ All LLM calls are mocked - no real API calls. Tests focus on:
 import json
 from unittest.mock import MagicMock
 
-import pytest
-
-from simple_agent.config import ModelConfig, PipelineConfig, PipelineResult
+from simple_agent.config import ModelConfig, PipelineConfig
 from simple_agent.persona import Persona
 from simple_agent.pipeline import _extract_json, run_batch, run_pipeline
 from simple_agent.quality import default_rules
@@ -179,7 +177,7 @@ class TestRunPipeline:
     def test_persists_to_state_store(self):
         config = _make_config()
         store = StateStore(":memory:")
-        result = run_pipeline(SAMPLE_ITEM, config, state=store)
+        _result = run_pipeline(SAMPLE_ITEM, config, state=store)
         assert store.has_item("test-1")
         drafts = store.get_pending_drafts()
         assert len(drafts) == 1

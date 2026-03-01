@@ -11,7 +11,6 @@ Mirrors test_pipeline.py structure with async mocks. Tests focus on:
 from unittest.mock import AsyncMock, MagicMock
 
 from simple_agent.config import AsyncPipelineConfig, ModelConfig
-from simple_agent.persona import Persona
 from simple_agent.pipeline import arun_batch, arun_pipeline
 from simple_agent.quality import default_rules
 from simple_agent.state import StateStore
@@ -92,7 +91,7 @@ class TestArunPipeline:
     async def test_persists_to_state_store(self):
         config = _make_async_config()
         store = StateStore(":memory:")
-        result = await arun_pipeline(SAMPLE_ITEM, config, state=store)
+        _result = await arun_pipeline(SAMPLE_ITEM, config, state=store)
         assert store.has_item("test-1")
         drafts = store.get_pending_drafts()
         assert len(drafts) == 1

@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/github/license/onblueroses/simple-autonomous-agent)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-~750 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
+~1,000 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
 
 Simple to use :).
 
@@ -73,7 +73,7 @@ Those frameworks give you an orchestration layer with dozens of abstractions, pl
 - **Multi-model routing by design** - cheap models score, thinking models reason, writing models draft. You're not paying GPT-4 prices to decide if an item is worth processing.
 - **Output quality built in** - regex rules catch AI writing patterns (em dashes, "delve/crucial/landscape", filler closings) before the output leaves the pipeline. Most frameworks treat output quality as someone else's problem.
 - **Each stage fails independently** - if your search API is down, the draft still happens without grounding. Nothing cascades. This matters in production, where something is always half-broken.
-- **750 lines you can read in one sitting**. No framework to learn, no magic. Fork it, change it, own it.
+- **~1,000 lines you can read in one sitting**. No framework to learn, no magic. Fork it, change it, own it.
 
 If you need tool use, multi-agent conversations, or RAG pipelines, use a framework. If you need a reliable content pipeline that sounds human, this is smaller and more focused.
 
