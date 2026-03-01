@@ -1,15 +1,8 @@
 """LLM client with model routing.
 
-Different models are good at different jobs. A 12B parameter model can score
-relevance for pennies per thousand calls, but it can't write nuanced analysis.
-A 235B thinking model produces great reasoning but is slow and expensive for
-simple classification. A creative writing model generates fluent prose but
-hallucinates if it doesn't have grounding context.
-
-This module gives each job to the right model: score() for cheap classification,
-reason() for deep analysis (with thinking-model support), draft() for persona-voiced
-generation. All three use the same OpenAI-compatible client, so they work with
-any provider: OpenRouter, Ollama, Together, vLLM.
+score() for cheap classification, reason() for deep analysis (thinking-model
+support), draft() for persona-voiced generation. All three use the OpenAI-
+compatible client interface, so they work with any provider.
 """
 
 from __future__ import annotations
@@ -58,7 +51,6 @@ def create_client(
     api_key: str,
     default_headers: dict[str, str] | None = None,
 ) -> openai.OpenAI:
-    """Create an OpenAI-compatible client."""
     return openai.OpenAI(
         base_url=base_url,
         api_key=api_key,
@@ -106,11 +98,9 @@ def reason(
     message = response.choices[0].message
     content = message.content or ""
 
-    # If content is non-empty, check for <think> tags and strip them
     if content:
         return _strip_think_tags(content)
 
-    # Try provider-specific reasoning fields
     if hasattr(message, "reasoning_content") and message.reasoning_content:
         return message.reasoning_content
     if hasattr(message, "reasoning") and message.reasoning:
@@ -119,17 +109,12 @@ def reason(
     return content
 
 
-# Regex to match <think>...</think> blocks (case-insensitive, dotall)
 _THINK_TAG_RE = re.compile(r"<think>(.*?)</think>(.*)", re.DOTALL | re.IGNORECASE)
 
 
 def _strip_think_tags(content: str) -> str:
-    """Strip <think> tags from model output.
-
-    If there's content after the closing </think> tag, return that (the actual
-    answer). Otherwise return the content inside the tags (some models put
-    everything inside).
-    """
+    """Content after </think> is the answer. If nothing follows the tag,
+    the model put everything inside - return that instead."""
     match = _THINK_TAG_RE.search(content)
     if not match:
         return content
@@ -161,11 +146,7 @@ def draft(
     return response.choices[0].message.content or ""
 
 
-# --- Async counterparts ---
-
-
 async def _async_retry_llm_call(fn, *args, max_retries: int = 2, base_delay: float = 1.0, **kwargs):
-    """Async version of _retry_llm_call. Uses await for the call and asyncio.sleep for backoff."""
     last_error = None
     for attempt in range(max_retries + 1):
         try:
@@ -184,7 +165,7 @@ def acreate_client(
     api_key: str,
     default_headers: dict[str, str] | None = None,
 ) -> openai.AsyncOpenAI:
-    """Create an async OpenAI-compatible client. Constructor is sync."""
+    """Constructor is sync - safe to call outside an event loop."""
     return openai.AsyncOpenAI(
         base_url=base_url,
         api_key=api_key,
@@ -199,7 +180,6 @@ async def ascore(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Async single-turn completion for classification."""
     response = await _async_retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
@@ -217,7 +197,6 @@ async def areason(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Async single-turn completion with thinking-model support."""
     response = await _async_retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
@@ -247,7 +226,6 @@ async def adraft(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Async system + user message completion for persona-voiced generation."""
     response = await _async_retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,

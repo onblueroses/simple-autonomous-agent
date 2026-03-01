@@ -1,12 +1,3 @@
-"""Tests for the pipeline orchestration.
-
-All LLM calls are mocked - no real API calls. Tests focus on:
-- Score threshold filtering
-- Fault tolerance (stages failing independently)
-- Full flow producing populated results
-- Quality violations being recorded
-"""
-
 import json
 from unittest.mock import MagicMock
 
@@ -23,16 +14,12 @@ def _make_config(
     draft_response: str = "The yield at 4.2% is below market average for comparable assets.",
     score_threshold: float = 0.6,
 ) -> PipelineConfig:
-    """Create a PipelineConfig with mocked LLM clients."""
     mock_scorer = MagicMock()
     mock_scorer.chat.completions.create.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content=score_response))]
     )
 
     mock_writer = MagicMock()
-
-    # Writer client handles both reason() and draft() calls
-    # We use side_effect to return different responses for sequential calls
     mock_writer.chat.completions.create.side_effect = [
         # First call: reason()
         MagicMock(choices=[MagicMock(message=MagicMock(content=reason_response, reasoning=None))]),
@@ -89,8 +76,8 @@ class TestRunPipeline:
         result = run_pipeline(SAMPLE_ITEM, config)
         assert result.item_id == "test-1"
         assert result.score == 0.8
-        assert result.draft != ""
-        assert result.reasoning != ""
+        assert result.draft == "The yield at 4.2% is below market average for comparable assets."
+        assert result.reasoning == "Core question is about investment returns."
 
     def test_score_below_threshold_returns_early(self):
         config = _make_config(
@@ -259,7 +246,7 @@ class TestRunBatch:
         )
         results = run_batch(items, config, delay=0)
         assert len(results) == 2
-        assert all(r.draft != "" for r in results)
+        assert all(r.draft == "A well-reasoned response with concrete details and specific numbers." for r in results)
 
     def test_logs_run_to_state(self):
         items = [{"id": "a", "text": "Test"}]
