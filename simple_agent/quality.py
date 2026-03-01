@@ -1,17 +1,7 @@
 """Output quality rules and input sanitization.
 
-Why regex over LLM-based quality checks: Quality validation runs on every
-output, so it must be deterministic, instant, and free. Regex rules catch
-the most common AI writing patterns (em dashes, "delve/crucial/landscape",
-exactly-three-item lists, filler openings and closings) without an API call.
-These patterns are empirically the strongest signals of AI authorship - a
-human reader spots them in seconds.
-
-Why sanitize_input matters: When untrusted text (user content, scraped data)
-goes into LLM prompts, prompt injection is a real risk. The sanitization
-strips common injection patterns ("ignore previous instructions", fake XML
-tags, role-switching attempts) before the text reaches any model. It's not
-foolproof, but it catches the obvious attacks.
+Regex over LLM-based quality checks: validation runs on every output, so it
+must be deterministic, instant, and free.
 """
 
 from __future__ import annotations
@@ -53,12 +43,11 @@ DEFAULT_RULES: tuple[QualityRule, ...] = (
 
 
 def default_rules() -> list[QualityRule]:
-    """Return a mutable copy of the built-in quality rules."""
+    """Mutable copy so callers can append without mutating the module constant."""
     return list(DEFAULT_RULES)
 
 
 def check_quality(text: str, rules: list[QualityRule]) -> list[Violation]:
-    """Run rules against text. Returns all violations."""
     violations = []
     for rule in rules:
         for match in re.findall(rule.pattern, text, re.MULTILINE):
@@ -69,8 +58,6 @@ def check_quality(text: str, rules: list[QualityRule]) -> list[Violation]:
             ))
     return violations
 
-
-# --- Input sanitization ---
 
 _INJECTION_RE = re.compile("|".join([
     r"ignore (?:all )?(?:previous |prior )?instructions",
@@ -87,7 +74,6 @@ _INJECTION_RE = re.compile("|".join([
 
 
 def sanitize_input(text: str) -> str:
-    """Strip prompt injection patterns from untrusted input."""
     return _INJECTION_RE.sub("[...]", text)
 
 
@@ -96,8 +82,8 @@ def validate_output(
     rules: list[QualityRule] | None = None,
     min_words: int = 20,
     max_words: int = 500,
-) -> tuple[bool, list[str]]:
-    """Check output length and quality. Returns (passed, reasons)."""
+) -> list[str]:
+    """Check output length and quality. Returns failure reasons (empty = passed)."""
     reasons = []
     word_count = len(text.split())
 
@@ -110,4 +96,4 @@ def validate_output(
         for v in check_quality(text, rules):
             reasons.append(f"[{v.severity}] {v.rule}: matched '{v.matched}'")
 
-    return (len(reasons) == 0, reasons)
+    return reasons

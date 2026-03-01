@@ -27,8 +27,6 @@ _DEFAULT_PERSONA_SELECT_PROMPT = (
 
 @dataclass
 class ModelConfig:
-    """Configuration for a single LLM model."""
-
     model: str
     max_tokens: int = 1024
     temperature: float | None = None
@@ -36,8 +34,6 @@ class ModelConfig:
 
 @dataclass
 class PipelineConfig:
-    """Configuration for the full score-ground-reason-draft pipeline."""
-
     scorer: ModelConfig
     reasoner: ModelConfig
     writer: ModelConfig
@@ -76,8 +72,6 @@ class AsyncPipelineConfig:
 
 @dataclass
 class PipelineResult:
-    """Result from a single pipeline run."""
-
     item_id: str
     score: float = 0.0
     grounding: str = ""

@@ -1,9 +1,3 @@
-"""Tests for LLM client functions.
-
-Covers thinking-model robustness (multiple provider patterns)
-and retry logic for transient failures.
-"""
-
 from unittest.mock import MagicMock, patch
 
 import openai
@@ -119,7 +113,6 @@ class TestRetryLlmCall:
             "success",
         ])
         _retry_llm_call(fn, max_retries=2, base_delay=1.0)
-        # First retry: 1.0 * 2^0 = 1.0, second: 1.0 * 2^1 = 2.0
         assert mock_sleep.call_args_list[0][0][0] == 1.0
         assert mock_sleep.call_args_list[1][0][0] == 2.0
 

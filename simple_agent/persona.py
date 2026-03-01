@@ -40,7 +40,7 @@ def load_persona(path: Path | str) -> Persona:
         name=data["name"],
         identity=data["identity"],
         voice=data["voice"],
-        expertise=data.get("expertise", []),
+        expertise=data["expertise"],
         constraints=data.get("constraints", []),
         example_outputs=data.get("example_outputs", []),
     )
