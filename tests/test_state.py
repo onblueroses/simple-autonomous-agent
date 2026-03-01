@@ -1,7 +1,5 @@
 """Tests for SQLite state persistence."""
 
-import time
-
 from simple_agent.state import StateStore
 
 

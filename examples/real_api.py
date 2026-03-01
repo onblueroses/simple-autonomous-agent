@@ -104,7 +104,7 @@ def main():
     if result.draft:
         print(f"\n--- Draft ---\n{result.draft}")
     if result.errors:
-        print(f"\n--- Errors ---")
+        print("\n--- Errors ---")
         for e in result.errors:
             print(f"  {e}")
 

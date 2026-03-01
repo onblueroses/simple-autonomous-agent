@@ -1,6 +1,5 @@
 """Tests for persona loading and system prompt construction."""
 
-import tempfile
 from pathlib import Path
 
 import pytest

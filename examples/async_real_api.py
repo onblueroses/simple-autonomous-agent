@@ -75,8 +75,8 @@ async def main():
 
     items = [
         {"id": "demo-1", "text": "What's a realistic rental yield in Berlin in 2026?"},
-        {"id": "demo-2", "text": "How does Denkmal-AfA work for heritage buildings?"},
-        {"id": "demo-3", "text": "Is Pflegeimmobilien a good investment for passive income?"},
+        {"id": "demo-2", "text": "What are the main factors affecting rental yield in urban areas?"},
+        {"id": "demo-3", "text": "How do interest rate changes affect real estate investment returns?"},
     ]
 
     print(f"Running async batch pipeline ({len(items)} items, max_concurrency=3)...\n")
@@ -91,7 +91,7 @@ async def main():
         if result.draft:
             print(f"\n--- Draft ---\n{result.draft[:300]}...")
         if result.errors:
-            print(f"\n--- Errors ---")
+            print("\n--- Errors ---")
             for e in result.errors:
                 print(f"  {e}")
 
