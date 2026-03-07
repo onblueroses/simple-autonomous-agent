@@ -1,5 +1,3 @@
-"""Multi-model LLM orchestration in ~1,000 lines."""
-
 from .config import AsyncPipelineConfig, ModelConfig, PipelineConfig, PipelineResult
 from .llm import acreate_client, adraft, areason, ascore, create_client, draft, reason, score
 from .persona import Persona, build_system_prompt, list_personas, load_persona
