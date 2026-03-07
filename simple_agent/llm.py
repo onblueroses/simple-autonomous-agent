@@ -15,7 +15,6 @@ import openai
 
 from .config import ModelConfig
 
-# Exceptions worth retrying - transient failures that often resolve on their own
 _RETRYABLE_ERRORS = (
     openai.RateLimitError,
     openai.APITimeoutError,
@@ -24,15 +23,6 @@ _RETRYABLE_ERRORS = (
 
 
 def _retry_llm_call(fn, *args, max_retries: int = 2, base_delay: float = 1.0, **kwargs):
-    """Retry an LLM call on transient failures with exponential backoff.
-
-    Only retries rate limits (429), timeouts, and connection errors. All other
-    exceptions propagate immediately - retrying a malformed request or auth
-    failure would just waste time.
-
-    With max_retries=2 and base_delay=1.0: first retry after 1s, second after 2s.
-    Total max wait: 3s for 3 attempts. Conservative enough for free-tier rate limits.
-    """
     last_error = None
     for attempt in range(max_retries + 1):
         try:
@@ -65,7 +55,6 @@ def score(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Single-turn completion for classification (scoring, persona selection)."""
     response = _retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
@@ -83,11 +72,6 @@ def reason(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """Single-turn completion with thinking-model support.
-
-    If content is non-empty, strips <think> tags and returns. If empty, falls
-    back to provider-specific fields: reasoning_content, then reasoning.
-    """
     response = _retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
@@ -102,11 +86,6 @@ _THINK_TAG_RE = re.compile(r"<think>(.*?)</think>(.*)", re.DOTALL | re.IGNORECAS
 
 
 def _extract_reasoning(message) -> str:
-    """Extract reasoning from a thinking-model response.
-
-    Checks content (stripping <think> tags), then provider-specific
-    fields: reasoning_content, reasoning.
-    """
     content = message.content or ""
     if content:
         return _strip_think_tags(content)
@@ -118,8 +97,7 @@ def _extract_reasoning(message) -> str:
 
 
 def _strip_think_tags(content: str) -> str:
-    """Content after </think> is the answer. If nothing follows the tag,
-    the model put everything inside - return that instead."""
+    # If nothing follows </think>, the model put everything inside - return that.
     match = _THINK_TAG_RE.search(content)
     if not match:
         return content
@@ -137,7 +115,6 @@ def draft(
     max_retries: int = 2,
     retry_base_delay: float = 1.0,
 ) -> str:
-    """System + user message completion for persona-voiced generation."""
     response = _retry_llm_call(
         client.chat.completions.create,
         model=config.model, max_tokens=config.max_tokens,
@@ -170,7 +147,6 @@ def acreate_client(
     api_key: str,
     default_headers: dict[str, str] | None = None,
 ) -> openai.AsyncOpenAI:
-    """Constructor is sync - safe to call outside an event loop."""
     return openai.AsyncOpenAI(
         base_url=base_url,
         api_key=api_key,
