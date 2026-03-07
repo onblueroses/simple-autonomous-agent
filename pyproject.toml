@@ -20,6 +20,9 @@ dev = [
     "pytest-asyncio>=0.23",
 ]
 
+[project.urls]
+Repository = "https://github.com/onblueroses/simple-autonomous-agent"
+
 [tool.setuptools.packages.find]
 include = ["simple_agent*"]
 

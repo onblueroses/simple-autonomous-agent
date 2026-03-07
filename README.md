@@ -6,7 +6,7 @@
 
 ~1,000 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
 
-Simple to use :).
+Simple to use.
 
 ## How it works
 
