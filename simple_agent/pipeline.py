@@ -22,22 +22,17 @@ _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
 
 def _extract_json(text: str) -> str:
-    """Handle fenced, preamble-wrapped, or clean JSON from LLM output."""
     text = text.strip()
 
-    # Try fenced extraction first
     fence_match = _FENCED_JSON_RE.search(text)
     if fence_match:
         return fence_match.group(1).strip()
 
-    # If text already starts with { or [, it's probably clean JSON
     if text.startswith("{") or text.startswith("["):
         return text
 
-    # Try to find the first JSON object in preamble text
     brace_idx = text.find("{")
     if brace_idx != -1:
-        # Find the matching closing brace by counting nesting
         depth = 0
         for i in range(brace_idx, len(text)):
             if text[i] == "{":
@@ -47,23 +42,19 @@ def _extract_json(text: str) -> str:
                 if depth == 0:
                     return text[brace_idx : i + 1]
 
-    # Nothing found - return original (will fail at json.loads, caught by try/except)
     return text
 
 
 def _parse_score(raw: str) -> float:
-    """Parse a score from LLM JSON output."""
     return float(json.loads(_extract_json(raw)).get("score", 0.0))
 
 
 def _resolve_persona(raw: str, personas: list[Persona]) -> Persona | None:
-    """Match LLM persona selection to a loaded persona."""
     name = json.loads(_extract_json(raw)).get("persona", "").lower()
     return next((p for p in personas if p.name.lower() == name), None)
 
 
 def _build_reason_prompt(text: str, grounding: str) -> str:
-    """Build the reasoning stage prompt with optional grounding context."""
     parts = ["Analyze this content. Identify the core question, relevant facts, and what a response should address."]
     if grounding:
         parts.append(f"\n<context>\n{grounding}\n</context>")
@@ -72,7 +63,6 @@ def _build_reason_prompt(text: str, grounding: str) -> str:
 
 
 def _build_draft_prompt(reasoning: str, grounding: str, text: str) -> str:
-    """Build the draft stage user prompt with analysis and research context."""
     parts = []
     if reasoning:
         parts.append(f"<analysis>\n{reasoning}\n</analysis>")
@@ -90,7 +80,6 @@ def _validate_and_persist(
     state: StateStore | None,
     errors: list[str],
 ) -> PipelineResult:
-    """Run quality checks and persist results. Shared by sync and async pipelines."""
     rules = config.quality_rules or default_rules()
     reasons = validate_output(result.draft, rules)
     result.passed_quality = len(reasons) == 0
@@ -115,7 +104,6 @@ def run_pipeline(
     state: StateStore | None = None,
     personas: list[Persona] | None = None,
 ) -> PipelineResult:
-    """Run the full pipeline for a single item. Each stage fails independently."""
     result = PipelineResult(item_id=item.get("id", "unknown"))
     errors: list[str] = []
     text = sanitize_input(item.get("text", ""))
@@ -195,7 +183,6 @@ def run_batch(
     personas: list[Persona] | None = None,
     delay: float = 1.0,
 ) -> list[PipelineResult]:
-    """Run the pipeline for a batch of items with rate limiting between calls."""
     results: list[PipelineResult] = []
     run_id = state.start_run() if state else None
     drafts_created = 0
@@ -221,7 +208,6 @@ async def arun_pipeline(
     state: StateStore | None = None,
     personas: list[Persona] | None = None,
 ) -> PipelineResult:
-    """Async version of run_pipeline. Each stage fails independently."""
     result = PipelineResult(item_id=item.get("id", "unknown"))
     errors: list[str] = []
     text = sanitize_input(item.get("text", ""))
@@ -301,11 +287,6 @@ async def arun_batch(
     personas: list[Persona] | None = None,
     max_concurrency: int = 5,
 ) -> list[PipelineResult]:
-    """Run the pipeline for a batch of items with bounded concurrency.
-
-    Uses asyncio.Semaphore instead of time.sleep delays. Results are returned
-    in the same order as the input items.
-    """
     sem = asyncio.Semaphore(max_concurrency)
     run_id = state.start_run() if state else None
 
