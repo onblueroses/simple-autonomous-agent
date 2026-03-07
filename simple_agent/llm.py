@@ -95,21 +95,26 @@ def reason(
         messages=[{"role": "user", "content": prompt}],
         max_retries=max_retries, base_delay=retry_base_delay,
     )
-    message = response.choices[0].message
-    content = message.content or ""
+    return _extract_reasoning(response.choices[0].message)
 
+
+_THINK_TAG_RE = re.compile(r"<think>(.*?)</think>(.*)", re.DOTALL | re.IGNORECASE)
+
+
+def _extract_reasoning(message) -> str:
+    """Extract reasoning from a thinking-model response.
+
+    Checks content (stripping <think> tags), then provider-specific
+    fields: reasoning_content, reasoning.
+    """
+    content = message.content or ""
     if content:
         return _strip_think_tags(content)
-
     if hasattr(message, "reasoning_content") and message.reasoning_content:
         return message.reasoning_content
     if hasattr(message, "reasoning") and message.reasoning:
         return message.reasoning
-
     return content
-
-
-_THINK_TAG_RE = re.compile(r"<think>(.*?)</think>(.*)", re.DOTALL | re.IGNORECASE)
 
 
 def _strip_think_tags(content: str) -> str:
@@ -204,18 +209,7 @@ async def areason(
         messages=[{"role": "user", "content": prompt}],
         max_retries=max_retries, base_delay=retry_base_delay,
     )
-    message = response.choices[0].message
-    content = message.content or ""
-
-    if content:
-        return _strip_think_tags(content)
-
-    if hasattr(message, "reasoning_content") and message.reasoning_content:
-        return message.reasoning_content
-    if hasattr(message, "reasoning") and message.reasoning:
-        return message.reasoning
-
-    return content
+    return _extract_reasoning(response.choices[0].message)
 
 
 async def adraft(

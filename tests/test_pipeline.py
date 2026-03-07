@@ -1,9 +1,19 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from simple_agent.config import ModelConfig, PipelineConfig
 from simple_agent.persona import Persona
-from simple_agent.pipeline import _extract_json, run_batch, run_pipeline
+from simple_agent.pipeline import (
+    _build_draft_prompt,
+    _build_reason_prompt,
+    _extract_json,
+    _parse_score,
+    _resolve_persona,
+    run_batch,
+    run_pipeline,
+)
 from simple_agent.quality import default_rules
 from simple_agent.state import StateStore
 
@@ -274,3 +284,78 @@ class TestRunBatch:
         assert row is not None
         assert row["items_processed"] == 1
         store.close()
+
+
+class TestParseScore:
+    def test_clean_json(self):
+        assert _parse_score('{"score": 0.85, "reason": "good"}') == 0.85
+
+    def test_fenced_json(self):
+        assert _parse_score('```json\n{"score": 0.7}\n```') == 0.7
+
+    def test_missing_score_defaults_zero(self):
+        assert _parse_score('{"reason": "no score key"}') == 0.0
+
+    def test_invalid_json_raises(self):
+        with pytest.raises(Exception):
+            _parse_score("not json at all")
+
+
+class TestResolvePersona:
+    _PERSONAS = [
+        Persona(name="Analyst", identity="A.", voice="V.", expertise=["Finance"]),
+        Persona(name="Researcher", identity="R.", voice="V.", expertise=["Science"]),
+    ]
+
+    def test_match(self):
+        p = _resolve_persona('{"persona": "Analyst"}', self._PERSONAS)
+        assert p is not None
+        assert p.name == "Analyst"
+
+    def test_case_insensitive(self):
+        p = _resolve_persona('{"persona": "researcher"}', self._PERSONAS)
+        assert p is not None
+        assert p.name == "Researcher"
+
+    def test_no_match_returns_none(self):
+        assert _resolve_persona('{"persona": "Unknown"}', self._PERSONAS) is None
+
+    def test_empty_persona_returns_none(self):
+        assert _resolve_persona('{"persona": ""}', self._PERSONAS) is None
+
+
+class TestBuildReasonPrompt:
+    def test_without_grounding(self):
+        prompt = _build_reason_prompt("Some text", "")
+        assert "<content>\nSome text\n</content>" in prompt
+        assert "<context>" not in prompt
+
+    def test_with_grounding(self):
+        prompt = _build_reason_prompt("Some text", "Research context")
+        assert "<context>\nResearch context\n</context>" in prompt
+        assert "<content>\nSome text\n</content>" in prompt
+
+
+class TestBuildDraftPrompt:
+    def test_with_reasoning_and_grounding(self):
+        prompt = _build_draft_prompt("Analysis here", "Research here", "Content here")
+        assert "<analysis>\nAnalysis here\n</analysis>" in prompt
+        assert "<research>\nResearch here\n</research>" in prompt
+        assert "<content>\nContent here\n</content>" in prompt
+
+    def test_without_reasoning(self):
+        prompt = _build_draft_prompt("", "Research here", "Content here")
+        assert "<analysis>" not in prompt
+        assert "<research>\nResearch here\n</research>" in prompt
+
+    def test_without_grounding(self):
+        prompt = _build_draft_prompt("Analysis here", "", "Content here")
+        assert "<analysis>\nAnalysis here\n</analysis>" in prompt
+        assert "<research>" not in prompt
+
+    def test_minimal(self):
+        prompt = _build_draft_prompt("", "", "Content only")
+        assert "<analysis>" not in prompt
+        assert "<research>" not in prompt
+        assert "<content>\nContent only\n</content>" in prompt
+        assert "Write a response" in prompt
