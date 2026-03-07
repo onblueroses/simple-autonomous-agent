@@ -142,7 +142,7 @@ Two dependencies: `openai` and `pyyaml`.
 python -m pytest tests/ -v
 ```
 
-96 tests, no API keys needed. Pipeline tests use mocked LLM calls.
+108 tests, no API keys needed. Pipeline tests use mocked LLM calls.
 
 ## Configuring prompts
 
