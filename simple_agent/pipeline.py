@@ -51,6 +51,64 @@ def _extract_json(text: str) -> str:
     return text
 
 
+def _parse_score(raw: str) -> float:
+    """Parse a score from LLM JSON output."""
+    return float(json.loads(_extract_json(raw)).get("score", 0.0))
+
+
+def _resolve_persona(raw: str, personas: list[Persona]) -> Persona | None:
+    """Match LLM persona selection to a loaded persona."""
+    name = json.loads(_extract_json(raw)).get("persona", "").lower()
+    return next((p for p in personas if p.name.lower() == name), None)
+
+
+def _build_reason_prompt(text: str, grounding: str) -> str:
+    """Build the reasoning stage prompt with optional grounding context."""
+    parts = ["Analyze this content. Identify the core question, relevant facts, and what a response should address."]
+    if grounding:
+        parts.append(f"\n<context>\n{grounding}\n</context>")
+    parts.append(f"\n<content>\n{text}\n</content>")
+    return "\n".join(parts)
+
+
+def _build_draft_prompt(reasoning: str, grounding: str, text: str) -> str:
+    """Build the draft stage user prompt with analysis and research context."""
+    parts = []
+    if reasoning:
+        parts.append(f"<analysis>\n{reasoning}\n</analysis>")
+    if grounding:
+        parts.append(f"<research>\n{grounding}\n</research>")
+    parts.append(f"<content>\n{text}\n</content>")
+    parts.append("\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above.")
+    return "\n".join(parts)
+
+
+def _validate_and_persist(
+    result: PipelineResult,
+    item: dict,
+    config: PipelineConfig | AsyncPipelineConfig,
+    state: StateStore | None,
+    errors: list[str],
+) -> PipelineResult:
+    """Run quality checks and persist results. Shared by sync and async pipelines."""
+    rules = config.quality_rules or default_rules()
+    reasons = validate_output(result.draft, rules)
+    result.passed_quality = len(reasons) == 0
+    errors.extend(reasons)
+
+    if state:
+        try:
+            state.save_item(result.item_id, item, result.score)
+            if result.draft:
+                state.save_draft(result.item_id, result.persona or "default", result.draft)
+                state.update_item_status(result.item_id, "drafted")
+        except Exception as e:
+            errors.append(f"persistence: {e}")
+
+    result.errors = errors
+    return result
+
+
 def run_pipeline(
     item: dict,
     config: PipelineConfig,
@@ -69,8 +127,7 @@ def run_pipeline(
             config.scorer_client, score_prompt, config.scorer,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
-        parsed = json.loads(_extract_json(raw_score))
-        result.score = float(parsed.get("score", 0.0))
+        result.score = _parse_score(raw_score)
     except Exception as e:
         errors.append(f"scoring: {e}")
         result.score = 0.0
@@ -93,8 +150,7 @@ def run_pipeline(
                 config.scorer_client, select_prompt, config.scorer,
                 max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
             )
-            selected_name = json.loads(_extract_json(raw)).get("persona", "").lower()
-            selected = next((p for p in personas if p.name.lower() == selected_name), None)
+            selected = _resolve_persona(raw, personas)
         except Exception as e:
             errors.append(f"persona selection: {e}")
 
@@ -112,12 +168,8 @@ def run_pipeline(
 
     # Reason
     try:
-        reason_parts = ["Analyze this content. Identify the core question, relevant facts, and what a response should address."]
-        if result.grounding:
-            reason_parts.append(f"\n<context>\n{result.grounding}\n</context>")
-        reason_parts.append(f"\n<content>\n{text}\n</content>")
         result.reasoning = llm.reason(
-            config.writer_client, "\n".join(reason_parts), config.reasoner,
+            config.writer_client, _build_reason_prompt(text, result.grounding), config.reasoner,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
     except Exception as e:
@@ -126,38 +178,14 @@ def run_pipeline(
     # Draft
     try:
         system_prompt = build_system_prompt(selected) if selected else "You are a knowledgeable writer. Be direct and specific."
-        user_parts = []
-        if result.reasoning:
-            user_parts.append(f"<analysis>\n{result.reasoning}\n</analysis>")
-        if result.grounding:
-            user_parts.append(f"<research>\n{result.grounding}\n</research>")
-        user_parts.append(f"<content>\n{text}\n</content>")
-        user_parts.append("\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above.")
         result.draft = llm.draft(
-            config.writer_client, system_prompt, "\n".join(user_parts), config.writer,
+            config.writer_client, system_prompt, _build_draft_prompt(result.reasoning, result.grounding, text), config.writer,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
     except Exception as e:
         errors.append(f"drafting: {e}")
 
-    # Validate
-    rules = config.quality_rules or default_rules()
-    reasons = validate_output(result.draft, rules)
-    result.passed_quality = len(reasons) == 0
-    errors.extend(reasons)
-
-    # Persist
-    if state:
-        try:
-            state.save_item(result.item_id, item, result.score)
-            if result.draft:
-                state.save_draft(result.item_id, result.persona or "default", result.draft)
-                state.update_item_status(result.item_id, "drafted")
-        except Exception as e:
-            errors.append(f"persistence: {e}")
-
-    result.errors = errors
-    return result
+    return _validate_and_persist(result, item, config, state, errors)
 
 
 def run_batch(
@@ -205,8 +233,7 @@ async def arun_pipeline(
             config.scorer_client, score_prompt, config.scorer,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
-        parsed = json.loads(_extract_json(raw_score))
-        result.score = float(parsed.get("score", 0.0))
+        result.score = _parse_score(raw_score)
     except Exception as e:
         errors.append(f"scoring: {e}")
         result.score = 0.0
@@ -229,8 +256,7 @@ async def arun_pipeline(
                 config.scorer_client, select_prompt, config.scorer,
                 max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
             )
-            selected_name = json.loads(_extract_json(raw)).get("persona", "").lower()
-            selected = next((p for p in personas if p.name.lower() == selected_name), None)
+            selected = _resolve_persona(raw, personas)
         except Exception as e:
             errors.append(f"persona selection: {e}")
 
@@ -248,12 +274,8 @@ async def arun_pipeline(
 
     # Reason
     try:
-        reason_parts = ["Analyze this content. Identify the core question, relevant facts, and what a response should address."]
-        if result.grounding:
-            reason_parts.append(f"\n<context>\n{result.grounding}\n</context>")
-        reason_parts.append(f"\n<content>\n{text}\n</content>")
         result.reasoning = await llm.areason(
-            config.writer_client, "\n".join(reason_parts), config.reasoner,
+            config.writer_client, _build_reason_prompt(text, result.grounding), config.reasoner,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
     except Exception as e:
@@ -262,38 +284,14 @@ async def arun_pipeline(
     # Draft
     try:
         system_prompt = build_system_prompt(selected) if selected else "You are a knowledgeable writer. Be direct and specific."
-        user_parts = []
-        if result.reasoning:
-            user_parts.append(f"<analysis>\n{result.reasoning}\n</analysis>")
-        if result.grounding:
-            user_parts.append(f"<research>\n{result.grounding}\n</research>")
-        user_parts.append(f"<content>\n{text}\n</content>")
-        user_parts.append("\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above.")
         result.draft = await llm.adraft(
-            config.writer_client, system_prompt, "\n".join(user_parts), config.writer,
+            config.writer_client, system_prompt, _build_draft_prompt(result.reasoning, result.grounding, text), config.writer,
             max_retries=config.max_retries, retry_base_delay=config.retry_base_delay,
         )
     except Exception as e:
         errors.append(f"drafting: {e}")
 
-    # Validate (sync - pure CPU)
-    rules = config.quality_rules or default_rules()
-    reasons = validate_output(result.draft, rules)
-    result.passed_quality = len(reasons) == 0
-    errors.extend(reasons)
-
-    # Persist (sync - microsecond SQLite)
-    if state:
-        try:
-            state.save_item(result.item_id, item, result.score)
-            if result.draft:
-                state.save_draft(result.item_id, result.persona or "default", result.draft)
-                state.update_item_status(result.item_id, "drafted")
-        except Exception as e:
-            errors.append(f"persistence: {e}")
-
-    result.errors = errors
-    return result
+    return _validate_and_persist(result, item, config, state, errors)
 
 
 async def arun_batch(
