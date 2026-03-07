@@ -15,6 +15,12 @@ class StateStore:
         self._conn.row_factory = sqlite3.Row
         self._init_schema()
 
+    def __enter__(self) -> StateStore:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def _init_schema(self) -> None:
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS items (
