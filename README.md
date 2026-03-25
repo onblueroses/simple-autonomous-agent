@@ -112,16 +112,6 @@ python examples/async_real_api.py        # async (3 items concurrently)
 
 The sync example demonstrates the full pipeline with DuckDuckGo grounding, persona-voiced drafting, and quality validation. The async example runs a batch of 3 items concurrently.
 
-## Install
-
-```bash
-git clone https://github.com/onblueroses/simple-autonomous-agent.git
-cd simple-autonomous-agent
-pip install -e ".[dev]"
-```
-
-Two dependencies: `openai` and `pyyaml`.
-
 ## Modules
 
 **`llm.py`** - `create_client()`, `score()`, `reason()`, `draft()` and their async counterparts (`acreate_client()`, `ascore()`, `areason()`, `adraft()`). Each function targets a different job. `score()` handles cheap classification, `reason()` handles thinking models that return output in `reasoning`, `reasoning_content`, or `<think>` tags. `draft()` uses system-message identity framing for persona voice. All calls include retry with exponential backoff for rate limits and timeouts.
