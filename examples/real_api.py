@@ -2,7 +2,7 @@
 
 Setup:
     1. Get a free API key at https://openrouter.ai/keys (no credit card needed)
-    2. Set it: export OPENROUTER_API_KEY=sk-or-v1-...
+    2. Set it: export OPENROUTER_API_KEY="<your-openrouter-key>"
     3. Run: python examples/real_api.py
 
 Uses three free models for three jobs:

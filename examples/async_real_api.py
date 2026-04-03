@@ -2,7 +2,7 @@
 
 Setup:
     1. Get a free API key at https://openrouter.ai/keys (no credit card needed)
-    2. Set it: export OPENROUTER_API_KEY=sk-or-v1-...
+    2. Set it: export OPENROUTER_API_KEY="<your-openrouter-key>"
     3. Run: python examples/async_real_api.py
 
 Demonstrates concurrent batch processing: 3 items run in parallel with

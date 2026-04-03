@@ -105,7 +105,7 @@ results = await arun_batch(items, config, max_concurrency=5)
 ## Run the examples
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-v1-...   # free at openrouter.ai/keys
+export OPENROUTER_API_KEY="<your-openrouter-key>"   # free at openrouter.ai/keys
 python examples/real_api.py              # sync
 python examples/async_real_api.py        # async (3 items concurrently)
 ```
