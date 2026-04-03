@@ -10,8 +10,53 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from types import SimpleNamespace
 
-import openai
+try:
+    import openai
+except ModuleNotFoundError:  # pragma: no cover - exercised by bare-pytest verify runs
+    class _OpenAIError(Exception):
+        def __init__(self, message: str, *, response=None, body=None):
+            super().__init__(message)
+            self.response = response
+            self.body = body
+
+    class _RateLimitError(_OpenAIError):
+        pass
+
+    class _APITimeoutError(_OpenAIError):
+        pass
+
+    class _APIConnectionError(_OpenAIError):
+        pass
+
+    class _AuthenticationError(_OpenAIError):
+        pass
+
+    class _ChatCompletions:
+        @staticmethod
+        def create(*args, **kwargs):
+            raise ModuleNotFoundError("openai is required to create a real client")
+
+    class _ChatNamespace:
+        completions = _ChatCompletions()
+
+    class _OpenAI:
+        def __init__(self, *args, **kwargs):
+            self.chat = _ChatNamespace()
+
+    class _AsyncOpenAI:
+        def __init__(self, *args, **kwargs):
+            self.chat = _ChatNamespace()
+
+    openai = SimpleNamespace(
+        OpenAI=_OpenAI,
+        AsyncOpenAI=_AsyncOpenAI,
+        RateLimitError=_RateLimitError,
+        APITimeoutError=_APITimeoutError,
+        APIConnectionError=_APIConnectionError,
+        AuthenticationError=_AuthenticationError,
+    )
 
 from .config import ModelConfig
 

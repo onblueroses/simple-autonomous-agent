@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-import openai
 import pytest
 
+from simple_agent import llm as llm_module
 from simple_agent.config import ModelConfig
 from simple_agent.llm import _retry_llm_call, _strip_think_tags, reason
 
@@ -96,8 +96,8 @@ class TestRetryLlmCall:
     @patch("simple_agent.llm.time.sleep")
     def test_retries_on_rate_limit(self, mock_sleep):
         fn = MagicMock(side_effect=[
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
             "success",
         ])
         result = _retry_llm_call(fn, max_retries=2, base_delay=1.0)
@@ -108,8 +108,8 @@ class TestRetryLlmCall:
     @patch("simple_agent.llm.time.sleep")
     def test_exponential_backoff(self, mock_sleep):
         fn = MagicMock(side_effect=[
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
             "success",
         ])
         _retry_llm_call(fn, max_retries=2, base_delay=1.0)
@@ -117,27 +117,27 @@ class TestRetryLlmCall:
         assert mock_sleep.call_args_list[1][0][0] == 2.0
 
     def test_non_retryable_error_raises_immediately(self):
-        fn = MagicMock(side_effect=openai.AuthenticationError(
+        fn = MagicMock(side_effect=llm_module.openai.AuthenticationError(
             "bad key", response=MagicMock(status_code=401), body=None,
         ))
-        with pytest.raises(openai.AuthenticationError):
+        with pytest.raises(llm_module.openai.AuthenticationError):
             _retry_llm_call(fn, max_retries=2, base_delay=0.01)
         assert fn.call_count == 1
 
     @patch("simple_agent.llm.time.sleep")
     def test_exhausted_retries_raises(self, mock_sleep):
-        fn = MagicMock(side_effect=openai.RateLimitError(
+        fn = MagicMock(side_effect=llm_module.openai.RateLimitError(
             "rate limited", response=MagicMock(status_code=429), body=None,
         ))
-        with pytest.raises(openai.RateLimitError):
+        with pytest.raises(llm_module.openai.RateLimitError):
             _retry_llm_call(fn, max_retries=2, base_delay=0.01)
         assert fn.call_count == 3
 
     def test_zero_retries_disables_retry(self):
-        fn = MagicMock(side_effect=openai.RateLimitError(
+        fn = MagicMock(side_effect=llm_module.openai.RateLimitError(
             "rate limited", response=MagicMock(status_code=429), body=None,
         ))
-        with pytest.raises(openai.RateLimitError):
+        with pytest.raises(llm_module.openai.RateLimitError):
             _retry_llm_call(fn, max_retries=0, base_delay=0.01)
         assert fn.call_count == 1
 
