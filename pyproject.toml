@@ -9,6 +9,17 @@ description = "Multi-model LLM orchestration and output quality engineering in ~
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
+keywords = ["llm", "agents", "openai", "pipeline", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     "openai>=1.0.0",
     "pyyaml>=6.0",
@@ -21,7 +32,9 @@ dev = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/onblueroses/simple-autonomous-agent"
 Repository = "https://github.com/onblueroses/simple-autonomous-agent"
+Issues = "https://github.com/onblueroses/simple-autonomous-agent/issues"
 
 [tool.setuptools.packages.find]
 include = ["simple_agent*"]
