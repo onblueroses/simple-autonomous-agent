@@ -1,17 +1,41 @@
 """Tests for persona loading and system prompt construction."""
 
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
-import yaml
 
 from simple_agent.persona import Persona, build_system_prompt, list_personas, load_persona
 
 
 def _write_persona_yaml(dir_path: Path, filename: str, data: dict) -> Path:
     path = dir_path / filename
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f)
+    constraints = data.get("constraints", [])
+    examples = data.get("example_outputs", [])
+    expertise = data.get("expertise", [])
+
+    lines = []
+    if "name" in data:
+        lines.append(f'name: "{data["name"]}"')
+    if "identity" in data:
+        lines.append(f'identity: "{data["identity"]}"')
+    if "voice" in data:
+        lines.append(f'voice: "{data["voice"]}"')
+    if "expertise" in data:
+        lines.extend([
+            "expertise:",
+            *[f"  - {item}" for item in expertise],
+        ])
+
+    if constraints:
+        lines.extend(["constraints:", *[f"  - {item}" for item in constraints]])
+
+    if examples:
+        lines.append("example_outputs:")
+        for example in examples:
+            lines.extend(["  - >", *[f"    {line}" for line in example.splitlines()]])
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 
@@ -41,7 +65,9 @@ class TestLoadPersona:
 
     def test_raises_on_non_mapping(self, tmp_path):
         path = tmp_path / "bad.yaml"
-        path.write_text("just a string")
+        path.write_text(dedent("""\
+            just a string
+        """))
         with pytest.raises(ValueError, match="YAML mapping"):
             load_persona(path)
 

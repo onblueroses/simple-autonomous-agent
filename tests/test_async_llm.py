@@ -1,8 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import openai
 import pytest
 
+from simple_agent import llm as llm_module
 from simple_agent.config import ModelConfig
 from simple_agent.llm import _async_retry_llm_call, adraft, areason, ascore
 
@@ -11,8 +11,8 @@ class TestAsyncRetryLlmCall:
     @patch("simple_agent.llm.asyncio.sleep", new_callable=AsyncMock)
     async def test_retries_on_rate_limit(self, mock_sleep):
         fn = AsyncMock(side_effect=[
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
             "success",
         ])
         result = await _async_retry_llm_call(fn, max_retries=2, base_delay=1.0)
@@ -23,8 +23,8 @@ class TestAsyncRetryLlmCall:
     @patch("simple_agent.llm.asyncio.sleep", new_callable=AsyncMock)
     async def test_exponential_backoff(self, mock_sleep):
         fn = AsyncMock(side_effect=[
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
-            openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
+            llm_module.openai.RateLimitError("rate limited", response=MagicMock(status_code=429), body=None),
             "success",
         ])
         await _async_retry_llm_call(fn, max_retries=2, base_delay=1.0)
@@ -32,27 +32,27 @@ class TestAsyncRetryLlmCall:
         assert mock_sleep.call_args_list[1][0][0] == 2.0
 
     async def test_non_retryable_error_raises_immediately(self):
-        fn = AsyncMock(side_effect=openai.AuthenticationError(
+        fn = AsyncMock(side_effect=llm_module.openai.AuthenticationError(
             "bad key", response=MagicMock(status_code=401), body=None,
         ))
-        with pytest.raises(openai.AuthenticationError):
+        with pytest.raises(llm_module.openai.AuthenticationError):
             await _async_retry_llm_call(fn, max_retries=2, base_delay=0.01)
         assert fn.call_count == 1
 
     @patch("simple_agent.llm.asyncio.sleep", new_callable=AsyncMock)
     async def test_exhausted_retries_raises(self, mock_sleep):
-        fn = AsyncMock(side_effect=openai.RateLimitError(
+        fn = AsyncMock(side_effect=llm_module.openai.RateLimitError(
             "rate limited", response=MagicMock(status_code=429), body=None,
         ))
-        with pytest.raises(openai.RateLimitError):
+        with pytest.raises(llm_module.openai.RateLimitError):
             await _async_retry_llm_call(fn, max_retries=2, base_delay=0.01)
         assert fn.call_count == 3
 
     async def test_zero_retries_disables_retry(self):
-        fn = AsyncMock(side_effect=openai.RateLimitError(
+        fn = AsyncMock(side_effect=llm_module.openai.RateLimitError(
             "rate limited", response=MagicMock(status_code=429), body=None,
         ))
-        with pytest.raises(openai.RateLimitError):
+        with pytest.raises(llm_module.openai.RateLimitError):
             await _async_retry_llm_call(fn, max_retries=0, base_delay=0.01)
         assert fn.call_count == 1
 
@@ -150,5 +150,4 @@ class TestAdraft:
         config = ModelConfig(model="test")
         result = await adraft(client, "You are an expert.", "Write about this", config)
         assert result == "A well-crafted draft response."
-
 
