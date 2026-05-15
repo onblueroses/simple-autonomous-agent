@@ -151,6 +151,11 @@ DEFAULT_RULES: tuple[QualityRule, ...] = (
         r"(?i)(?:the future looks (?:bright|promising)|exciting times (?:lie ahead|are ahead)|only time will tell|a step in the right direction)",
         "Vacuous upbeat closings.",
     ),
+    QualityRule(
+        "prompt_leak",
+        r"(?i)(?:I am an AI|as an AI(?: language model)?|I cannot (?:help|assist)|I don'?t have access|</s>|\[INST\]|\[/INST\]|<\|im_(?:start|end)\|>|my training data|my knowledge cutoff)",
+        "Model self-reference / system-prompt fragment leaked into output.",
+    ),
 )
 
 

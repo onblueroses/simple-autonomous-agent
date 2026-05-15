@@ -46,6 +46,12 @@ class PipelineConfig:
     retry_base_delay: float = 1.0
     scorer_prompt_template: str = _DEFAULT_SCORER_PROMPT
     persona_select_prompt_template: str = _DEFAULT_PERSONA_SELECT_PROMPT
+    # Optional cost gate: called with (item_dict, persona_or_None, config) before
+    # ground_fn. If it returns False, grounding is skipped. Default None preserves
+    # current behavior (always ground when ground_fn is set).
+    needs_search: Callable[[dict, "object | None", "PipelineConfig"], bool] | None = (
+        None
+    )
 
 
 @dataclass
@@ -68,6 +74,15 @@ class AsyncPipelineConfig:
     retry_base_delay: float = 1.0
     scorer_prompt_template: str = _DEFAULT_SCORER_PROMPT
     persona_select_prompt_template: str = _DEFAULT_PERSONA_SELECT_PROMPT
+    # Optional cost gate. The async pipeline awaits the result if it's awaitable,
+    # so callers can pass either a sync `(item, persona, config) -> bool` or an
+    # async one returning Awaitable[bool]. Default None preserves current behavior.
+    needs_search: (
+        Callable[
+            [dict, "object | None", "AsyncPipelineConfig"], "Awaitable[bool] | bool"
+        ]
+        | None
+    ) = None
 
 
 @dataclass

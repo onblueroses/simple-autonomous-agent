@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from .quality import QualityRule
 
 
 _REQUIRED_FIELDS = {"name", "identity", "voice", "expertise"}
@@ -13,7 +17,11 @@ _REQUIRED_FIELDS = {"name", "identity", "voice", "expertise"}
 
 @dataclass
 class Persona:
-    """A persona the agent can adopt for generation."""
+    """A persona the agent can adopt for generation.
+
+    `quality_rules`, if set, REPLACES (does not merge with) the pipeline's
+    default rule set when validating this persona's drafts.
+    """
 
     name: str
     identity: str
@@ -21,6 +29,7 @@ class Persona:
     expertise: list[str]
     constraints: list[str] = field(default_factory=list)
     example_outputs: list[str] = field(default_factory=list)
+    quality_rules: list["QualityRule"] | None = None
 
 
 def load_persona(path: Path | str) -> Persona:

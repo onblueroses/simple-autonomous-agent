@@ -1,0 +1,110 @@
+{
+  "AsyncPipelineConfig": {
+    "callable": true,
+    "signature": "(scorer: 'ModelConfig', reasoner: 'ModelConfig', writer: 'ModelConfig', scorer_client: 'openai.AsyncOpenAI', writer_client: 'openai.AsyncOpenAI', quality_rules: 'list[QualityRule]' = <factory>, ground_fn: 'Callable[[str], Awaitable[str]] | None' = None, score_threshold: 'float' = 0.6, max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0, scorer_prompt_template: 'str' = 'Rate the relevance of this content on a scale of 0.0 to 1.0.\\nReturn ONLY a JSON object: {\"score\": <float>, \"reason\": \"<brief>\"}\\n\\nContent:\\n{content}', persona_select_prompt_template: 'str' = 'Given this content, which persona should respond?\\nAvailable: {personas}\\nReturn ONLY a JSON object: {\"persona\": \"<name>\", \"reason\": \"<brief>\"}\\n\\nContent:\\n{content}') -> None"
+  },
+  "ModelConfig": {
+    "callable": true,
+    "signature": "(model: 'str', max_tokens: 'int' = 1024, temperature: 'float | None' = None) -> None"
+  },
+  "Persona": {
+    "callable": true,
+    "signature": "(name: 'str', identity: 'str', voice: 'str', expertise: 'list[str]', constraints: 'list[str]' = <factory>, example_outputs: 'list[str]' = <factory>) -> None"
+  },
+  "PipelineConfig": {
+    "callable": true,
+    "signature": "(scorer: 'ModelConfig', reasoner: 'ModelConfig', writer: 'ModelConfig', scorer_client: 'openai.OpenAI', writer_client: 'openai.OpenAI', quality_rules: 'list[QualityRule]' = <factory>, ground_fn: 'Callable[[str], str] | None' = None, score_threshold: 'float' = 0.6, max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0, scorer_prompt_template: 'str' = 'Rate the relevance of this content on a scale of 0.0 to 1.0.\\nReturn ONLY a JSON object: {\"score\": <float>, \"reason\": \"<brief>\"}\\n\\nContent:\\n{content}', persona_select_prompt_template: 'str' = 'Given this content, which persona should respond?\\nAvailable: {personas}\\nReturn ONLY a JSON object: {\"persona\": \"<name>\", \"reason\": \"<brief>\"}\\n\\nContent:\\n{content}') -> None"
+  },
+  "PipelineResult": {
+    "callable": true,
+    "signature": "(item_id: 'str', score: 'float' = 0.0, grounding: 'str' = '', reasoning: 'str' = '', draft: 'str' = '', persona: 'str' = '', passed_quality: 'bool' = False, errors: 'list[str]' = <factory>) -> None"
+  },
+  "QualityRule": {
+    "callable": true,
+    "signature": "(name: 'str', pattern: 'str', description: 'str', severity: 'str' = 'warning') -> None"
+  },
+  "StateStore": {
+    "callable": true,
+    "signature": "(db_path: 'str' = ':memory:')"
+  },
+  "Violation": {
+    "callable": true,
+    "signature": "(rule: 'str', matched: 'str', severity: 'str') -> None"
+  },
+  "acreate_client": {
+    "callable": true,
+    "signature": "(base_url: 'str', api_key: 'str', default_headers: 'dict[str, str] | None' = None) -> 'openai.AsyncOpenAI'"
+  },
+  "adraft": {
+    "callable": true,
+    "signature": "(client: 'openai.AsyncOpenAI', system_prompt: 'str', user_prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "areason": {
+    "callable": true,
+    "signature": "(client: 'openai.AsyncOpenAI', prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "arun_batch": {
+    "callable": true,
+    "signature": "(items: 'list[dict]', config: 'AsyncPipelineConfig', state: 'StateStore | None' = None, personas: 'list[Persona] | None' = None, max_concurrency: 'int' = 5) -> 'list[PipelineResult]'"
+  },
+  "arun_pipeline": {
+    "callable": true,
+    "signature": "(item: 'dict', config: 'AsyncPipelineConfig', state: 'StateStore | None' = None, personas: 'list[Persona] | None' = None) -> 'PipelineResult'"
+  },
+  "ascore": {
+    "callable": true,
+    "signature": "(client: 'openai.AsyncOpenAI', prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "build_system_prompt": {
+    "callable": true,
+    "signature": "(persona: 'Persona') -> 'str'"
+  },
+  "check_quality": {
+    "callable": true,
+    "signature": "(text: 'str', rules: 'list[QualityRule]') -> 'list[Violation]'"
+  },
+  "create_client": {
+    "callable": true,
+    "signature": "(base_url: 'str', api_key: 'str', default_headers: 'dict[str, str] | None' = None) -> 'openai.OpenAI'"
+  },
+  "default_rules": {
+    "callable": true,
+    "signature": "() -> 'list[QualityRule]'"
+  },
+  "draft": {
+    "callable": true,
+    "signature": "(client: 'openai.OpenAI', system_prompt: 'str', user_prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "list_personas": {
+    "callable": true,
+    "signature": "(directory: 'Path | str') -> 'list[Persona]'"
+  },
+  "load_persona": {
+    "callable": true,
+    "signature": "(path: 'Path | str') -> 'Persona'"
+  },
+  "reason": {
+    "callable": true,
+    "signature": "(client: 'openai.OpenAI', prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "run_batch": {
+    "callable": true,
+    "signature": "(items: 'list[dict]', config: 'PipelineConfig', state: 'StateStore | None' = None, personas: 'list[Persona] | None' = None, delay: 'float' = 1.0) -> 'list[PipelineResult]'"
+  },
+  "run_pipeline": {
+    "callable": true,
+    "signature": "(item: 'dict', config: 'PipelineConfig', state: 'StateStore | None' = None, personas: 'list[Persona] | None' = None) -> 'PipelineResult'"
+  },
+  "sanitize_input": {
+    "callable": true,
+    "signature": "(text: 'str') -> 'str'"
+  },
+  "score": {
+    "callable": true,
+    "signature": "(client: 'openai.OpenAI', prompt: 'str', config: 'ModelConfig', max_retries: 'int' = 2, retry_base_delay: 'float' = 1.0) -> 'str'"
+  },
+  "validate_output": {
+    "callable": true,
+    "signature": "(text: 'str', rules: 'list[QualityRule] | None' = None, min_words: 'int' = 20, max_words: 'int' = 500) -> 'list[str]'"
+  }
+}
