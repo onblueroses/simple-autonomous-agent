@@ -26,10 +26,20 @@ def test_removes_trailing_commas():
 
 
 def test_combined_defects():
-    raw = '```json\n{\n  \u201cscore\u201d: 0.7,  // line comment\n  "reason": "ok",\n}\n```'
+    raw = '```json\n{\n  // header comment\n  \u201cscore\u201d: 0.7,\n  "reason": "ok",\n}\n```'
     assert json.loads(_extract_json(raw)) == {"score": 0.7, "reason": "ok"}
 
 
 def test_url_with_double_slash_in_string_preserved():
     raw = '{"link": "https://example.com/path"}'
     assert json.loads(_extract_json(raw)) == {"link": "https://example.com/path"}
+
+
+def test_double_slash_inside_string_value_preserved():
+    raw = '{"score": 0.8, "reason": "see // docs"}'
+    assert json.loads(_extract_json(raw)) == {"score": 0.8, "reason": "see // docs"}
+
+
+def test_inline_slash_after_value_preserved():
+    raw = '{"a": "x // y", "b": "p // q"}'
+    assert json.loads(_extract_json(raw)) == {"a": "x // y", "b": "p // q"}
