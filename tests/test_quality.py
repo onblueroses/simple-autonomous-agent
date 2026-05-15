@@ -163,6 +163,31 @@ class TestNewPatternCategories:
         assert "generic_positive_conclusion" not in [v.rule for v in violations]
 
 
+class TestPromptLeak:
+    def test_catches_as_ai_language_model(self):
+        v = check_quality("Sure! As an AI language model, I can help.", default_rules())
+        assert "prompt_leak" in [x.rule for x in v]
+
+    def test_catches_inst_tag(self):
+        v = check_quality("Output: [INST] something [/INST] result.", default_rules())
+        assert "prompt_leak" in [x.rule for x in v]
+
+    def test_catches_chatml_tag(self):
+        v = check_quality("Reply: <|im_start|>system\nyou are...", default_rules())
+        assert "prompt_leak" in [x.rule for x in v]
+
+    def test_catches_knowledge_cutoff(self):
+        v = check_quality("My knowledge cutoff is somewhere in 2024.", default_rules())
+        assert "prompt_leak" in [x.rule for x in v]
+
+    def test_clean_human_text_passes(self):
+        v = check_quality(
+            "The quarterly report shows a 3% revenue increase year-over-year.",
+            default_rules(),
+        )
+        assert "prompt_leak" not in [x.rule for x in v]
+
+
 class TestSanitizeInput:
     def test_strips_ignore_instructions(self):
         result = sanitize_input(

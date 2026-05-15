@@ -8,6 +8,7 @@ trusted context from untrusted user content to reduce prompt injection surface.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import time
@@ -117,8 +118,13 @@ def _validate_and_persist(
     config: PipelineConfig | AsyncPipelineConfig,
     state: StateStore | None,
     errors: list[str],
+    persona: Persona | None = None,
 ) -> PipelineResult:
-    rules = config.quality_rules or default_rules()
+    # Per-persona rules OVERRIDE the pipeline default — they replace, not merge.
+    if persona is not None and persona.quality_rules is not None:
+        rules = persona.quality_rules
+    else:
+        rules = config.quality_rules or default_rules()
     reasons = validate_output(result.draft, rules)
     result.passed_quality = len(reasons) == 0
     errors.extend(reasons)
@@ -158,6 +164,39 @@ def _apply_persona(
     if selected:
         result.persona = selected.name
     return selected
+
+
+def _should_skip_search(
+    config: PipelineConfig,
+    item: dict,
+    selected: Persona | None,
+    errors: list[str],
+) -> bool:
+    if config.needs_search is None:
+        return False
+    try:
+        return not bool(config.needs_search(item, selected, config))
+    except Exception as e:
+        errors.append(f"needs_search: {e}")
+        return False
+
+
+async def _async_should_skip_search(
+    config: AsyncPipelineConfig,
+    item: dict,
+    selected: Persona | None,
+    errors: list[str],
+) -> bool:
+    if config.needs_search is None:
+        return False
+    try:
+        raw = config.needs_search(item, selected, config)
+        if inspect.isawaitable(raw):
+            raw = await raw
+        return not bool(raw)
+    except Exception as e:
+        errors.append(f"needs_search: {e}")
+        return False
 
 
 def _finish_below_threshold(
@@ -213,8 +252,8 @@ def run_pipeline(
             errors.append(f"persona selection: {e}")
     selected = _apply_persona(selected, personas, result)
 
-    # Ground
-    if config.ground_fn:
+    # Ground (gated by optional needs_search)
+    if config.ground_fn and not _should_skip_search(config, item, selected, errors):
         try:
             result.grounding = config.ground_fn(text[:500])
         except Exception as e:
@@ -248,7 +287,50 @@ def run_pipeline(
     except Exception as e:
         errors.append(f"drafting: {e}")
 
-    return _validate_and_persist(result, item, config, state, errors)
+    return _validate_and_persist(result, item, config, state, errors, persona=selected)
+
+
+def _finalize_batch(
+    state: StateStore | None,
+    run_id: int | None,
+    results: list[PipelineResult],
+    n_items: int,
+) -> None:
+    if state and run_id is not None:
+        drafts_created = sum(1 for r in results if r.draft)
+        all_errors = [e for r in results for e in r.errors]
+        state.finish_run(run_id, n_items, drafts_created, all_errors)
+
+
+def _batch_iter_sync(
+    items: list[dict],
+    config: PipelineConfig,
+    state: StateStore | None,
+    personas: list[Persona] | None,
+    delay: float,
+) -> list[PipelineResult]:
+    results: list[PipelineResult] = []
+    for i, item in enumerate(items):
+        results.append(run_pipeline(item, config, state, personas))
+        if i < len(items) - 1 and delay > 0:
+            time.sleep(delay)
+    return results
+
+
+async def _batch_iter_async(
+    items: list[dict],
+    config: AsyncPipelineConfig,
+    state: StateStore | None,
+    personas: list[Persona] | None,
+    max_concurrency: int,
+) -> list[PipelineResult]:
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def _one(item: dict) -> PipelineResult:
+        async with sem:
+            return await arun_pipeline(item, config, state, personas)
+
+    return list(await asyncio.gather(*[_one(item) for item in items]))
 
 
 def run_batch(
@@ -258,22 +340,9 @@ def run_batch(
     personas: list[Persona] | None = None,
     delay: float = 1.0,
 ) -> list[PipelineResult]:
-    results: list[PipelineResult] = []
     run_id = state.start_run() if state else None
-    drafts_created = 0
-
-    for i, item in enumerate(items):
-        result = run_pipeline(item, config, state, personas)
-        results.append(result)
-        if result.draft:
-            drafts_created += 1
-        if i < len(items) - 1 and delay > 0:
-            time.sleep(delay)
-
-    if state and run_id is not None:
-        all_errors = [e for r in results for e in r.errors]
-        state.finish_run(run_id, len(items), drafts_created, all_errors)
-
+    results = _batch_iter_sync(items, config, state, personas, delay)
+    _finalize_batch(state, run_id, results, len(items))
     return results
 
 
@@ -320,8 +389,10 @@ async def arun_pipeline(
             errors.append(f"persona selection: {e}")
     selected = _apply_persona(selected, personas, result)
 
-    # Ground
-    if config.ground_fn:
+    # Ground (gated by optional needs_search; supports sync or async predicate)
+    if config.ground_fn and not await _async_should_skip_search(
+        config, item, selected, errors
+    ):
         try:
             result.grounding = await config.ground_fn(text[:500])
         except Exception as e:
@@ -355,7 +426,7 @@ async def arun_pipeline(
     except Exception as e:
         errors.append(f"drafting: {e}")
 
-    return _validate_and_persist(result, item, config, state, errors)
+    return _validate_and_persist(result, item, config, state, errors, persona=selected)
 
 
 async def arun_batch(
@@ -365,18 +436,7 @@ async def arun_batch(
     personas: list[Persona] | None = None,
     max_concurrency: int = 5,
 ) -> list[PipelineResult]:
-    sem = asyncio.Semaphore(max_concurrency)
     run_id = state.start_run() if state else None
-
-    async def _run_one(item: dict) -> PipelineResult:
-        async with sem:
-            return await arun_pipeline(item, config, state, personas)
-
-    results = await asyncio.gather(*[_run_one(item) for item in items])
-
-    if state and run_id is not None:
-        drafts_created = sum(1 for r in results if r.draft)
-        all_errors = [e for r in results for e in r.errors]
-        state.finish_run(run_id, len(items), drafts_created, all_errors)
-
-    return list(results)
+    results = await _batch_iter_async(items, config, state, personas, max_concurrency)
+    _finalize_batch(state, run_id, results, len(items))
+    return results
