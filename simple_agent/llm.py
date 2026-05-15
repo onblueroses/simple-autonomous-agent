@@ -10,53 +10,8 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from types import SimpleNamespace
 
-try:
-    import openai
-except ModuleNotFoundError:  # pragma: no cover - exercised by bare-pytest verify runs
-    class _OpenAIError(Exception):
-        def __init__(self, message: str, *, response=None, body=None):
-            super().__init__(message)
-            self.response = response
-            self.body = body
-
-    class _RateLimitError(_OpenAIError):
-        pass
-
-    class _APITimeoutError(_OpenAIError):
-        pass
-
-    class _APIConnectionError(_OpenAIError):
-        pass
-
-    class _AuthenticationError(_OpenAIError):
-        pass
-
-    class _ChatCompletions:
-        @staticmethod
-        def create(*args, **kwargs):
-            raise ModuleNotFoundError("openai is required to create a real client")
-
-    class _ChatNamespace:
-        completions = _ChatCompletions()
-
-    class _OpenAI:
-        def __init__(self, *args, **kwargs):
-            self.chat = _ChatNamespace()
-
-    class _AsyncOpenAI:
-        def __init__(self, *args, **kwargs):
-            self.chat = _ChatNamespace()
-
-    openai = SimpleNamespace(
-        OpenAI=_OpenAI,
-        AsyncOpenAI=_AsyncOpenAI,
-        RateLimitError=_RateLimitError,
-        APITimeoutError=_APITimeoutError,
-        APIConnectionError=_APIConnectionError,
-        AuthenticationError=_AuthenticationError,
-    )
+import openai
 
 from .config import ModelConfig
 
@@ -75,7 +30,7 @@ def _retry_llm_call(fn, *args, max_retries: int = 2, base_delay: float = 1.0, **
         except _RETRYABLE_ERRORS as e:
             last_error = e
             if attempt < max_retries:
-                time.sleep(base_delay * (2 ** attempt))
+                time.sleep(base_delay * (2**attempt))
             else:
                 raise
     raise last_error  # type: ignore[misc]
@@ -102,10 +57,12 @@ def score(
 ) -> str:
     response = _retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[{"role": "user", "content": prompt}],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return response.choices[0].message.content or ""
 
@@ -119,10 +76,12 @@ def reason(
 ) -> str:
     response = _retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[{"role": "user", "content": prompt}],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return _extract_reasoning(response.choices[0].message)
 
@@ -162,18 +121,22 @@ def draft(
 ) -> str:
     response = _retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return response.choices[0].message.content or ""
 
 
-async def _async_retry_llm_call(fn, *args, max_retries: int = 2, base_delay: float = 1.0, **kwargs):
+async def _async_retry_llm_call(
+    fn, *args, max_retries: int = 2, base_delay: float = 1.0, **kwargs
+):
     last_error = None
     for attempt in range(max_retries + 1):
         try:
@@ -181,7 +144,7 @@ async def _async_retry_llm_call(fn, *args, max_retries: int = 2, base_delay: flo
         except _RETRYABLE_ERRORS as e:
             last_error = e
             if attempt < max_retries:
-                await asyncio.sleep(base_delay * (2 ** attempt))
+                await asyncio.sleep(base_delay * (2**attempt))
             else:
                 raise
     raise last_error  # type: ignore[misc]
@@ -208,10 +171,12 @@ async def ascore(
 ) -> str:
     response = await _async_retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[{"role": "user", "content": prompt}],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return response.choices[0].message.content or ""
 
@@ -225,10 +190,12 @@ async def areason(
 ) -> str:
     response = await _async_retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[{"role": "user", "content": prompt}],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return _extract_reasoning(response.choices[0].message)
 
@@ -243,12 +210,14 @@ async def adraft(
 ) -> str:
     response = await _async_retry_llm_call(
         client.chat.completions.create,
-        model=config.model, max_tokens=config.max_tokens,
+        model=config.model,
+        max_tokens=config.max_tokens,
         temperature=config.temperature,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        max_retries=max_retries, base_delay=retry_base_delay,
+        max_retries=max_retries,
+        base_delay=retry_base_delay,
     )
     return response.choices[0].message.content or ""

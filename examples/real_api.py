@@ -5,10 +5,8 @@ Setup:
     2. Set it: export OPENROUTER_API_KEY="<your-openrouter-key>"
     3. Run: python examples/real_api.py
 
-Uses three free models for three jobs:
-    - Scorer: google/gemma-3-12b-it:free (fast, cheap classification)
-    - Reasoner: deepseek/deepseek-r1:free (thinking model for analysis)
-    - Writer: deepseek/deepseek-chat-v3-0324:free (creative, persona-voiced output)
+Uses three free models for three jobs. Verified 2026-05-15 against
+https://openrouter.ai/api/v1/models.
 """
 
 import os
@@ -17,7 +15,6 @@ import sys
 import urllib.request
 import urllib.parse
 
-# Add parent dir to path so this runs from the examples/ directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from simple_agent import (
@@ -31,7 +28,13 @@ from simple_agent import (
 )
 
 
+SCORER_MODEL = "nvidia/nemotron-nano-9b-v2:free"  # verified: 2026-05-15
+REASONER_MODEL = "deepseek/deepseek-v4-flash:free"  # verified: 2026-05-15
+WRITER_MODEL = "google/gemma-4-31b-it:free"  # verified: 2026-05-15
+
+
 # --- Grounding: DuckDuckGo search (no API key, stdlib only) ---
+
 
 def ddg_search(query: str) -> str:
     """Search DuckDuckGo and return text snippets. Zero dependencies beyond stdlib.
@@ -77,19 +80,24 @@ def main():
         sys.exit(1)
 
     client = create_client("https://openrouter.ai/api/v1", api_key)
-    persona = load_persona(os.path.join(os.path.dirname(__file__), "..", "personas", "analyst.yaml"))
+    persona = load_persona(
+        os.path.join(os.path.dirname(__file__), "..", "personas", "analyst.yaml")
+    )
 
     config = PipelineConfig(
-        scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
-        reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
-        writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
+        scorer=ModelConfig(SCORER_MODEL, max_tokens=256),
+        reasoner=ModelConfig(REASONER_MODEL, max_tokens=1024),
+        writer=ModelConfig(WRITER_MODEL, max_tokens=1024),
         scorer_client=client,
         writer_client=client,
-        ground_fn=ddg_search,  # swap with tavily_search for better results
+        ground_fn=ddg_search,
         quality_rules=default_rules(),
     )
 
-    item = {"id": "demo-1", "text": "What's a realistic rental yield in Berlin in 2026?"}
+    item = {
+        "id": "demo-1",
+        "text": "How do open-source dependency audit tools compare on signal-to-noise for medium-sized Python codebases?",
+    }
 
     print("Running pipeline...\n")
     result = run_pipeline(item, config, personas=[persona])
@@ -114,11 +122,11 @@ def main():
 
     bad_draft = (
         "That's a great question! Let me delve into this crucial topic. "
-        "The real estate landscape is shifting dramatically. Furthermore, "
-        "it's important to note that yields vary. Here are the key points:\n"
-        "1. Location matters\n"
-        "2. Timing is everything\n"
-        "3. Research is key\n"
+        "The dependency-audit landscape is shifting dramatically. Furthermore, "
+        "it's important to note that signal-to-noise varies. Here are the key points:\n"
+        "1. Coverage matters\n"
+        "2. Speed matters\n"
+        "3. False positives matter\n"
         "I hope this helps! Feel free to reach out if you have more questions."
     )
 

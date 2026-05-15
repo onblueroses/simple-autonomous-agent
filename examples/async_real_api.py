@@ -6,7 +6,8 @@ Setup:
     3. Run: python examples/async_real_api.py
 
 Demonstrates concurrent batch processing: 3 items run in parallel with
-max_concurrency=3 instead of sequential processing with delays.
+max_concurrency=3 instead of sequential processing with delays. Models
+verified 2026-05-15.
 """
 
 import asyncio
@@ -16,7 +17,6 @@ import sys
 import urllib.parse
 import urllib.request
 
-# Add parent dir to path so this runs from the examples/ directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from simple_agent import (
@@ -29,7 +29,13 @@ from simple_agent import (
 )
 
 
+SCORER_MODEL = "nvidia/nemotron-nano-9b-v2:free"  # verified: 2026-05-15
+REASONER_MODEL = "deepseek/deepseek-v4-flash:free"  # verified: 2026-05-15
+WRITER_MODEL = "google/gemma-4-31b-it:free"  # verified: 2026-05-15
+
+
 # --- Grounding: DuckDuckGo search wrapped for async ---
+
 
 def _ddg_search_sync(query: str) -> str:
     """Blocking DuckDuckGo search. Called via asyncio.to_thread."""
@@ -61,12 +67,14 @@ async def main():
         sys.exit(1)
 
     client = acreate_client("https://openrouter.ai/api/v1", api_key)
-    persona = load_persona(os.path.join(os.path.dirname(__file__), "..", "personas", "analyst.yaml"))
+    persona = load_persona(
+        os.path.join(os.path.dirname(__file__), "..", "personas", "analyst.yaml")
+    )
 
     config = AsyncPipelineConfig(
-        scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
-        reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
-        writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
+        scorer=ModelConfig(SCORER_MODEL, max_tokens=256),
+        reasoner=ModelConfig(REASONER_MODEL, max_tokens=1024),
+        writer=ModelConfig(WRITER_MODEL, max_tokens=1024),
         scorer_client=client,
         writer_client=client,
         ground_fn=ddg_search,
@@ -74,16 +82,25 @@ async def main():
     )
 
     items = [
-        {"id": "demo-1", "text": "What's a realistic rental yield in Berlin in 2026?"},
-        {"id": "demo-2", "text": "What are the main factors affecting rental yield in urban areas?"},
-        {"id": "demo-3", "text": "How do interest rate changes affect real estate investment returns?"},
+        {
+            "id": "demo-1",
+            "text": "How do open-source dependency audit tools compare on signal-to-noise?",
+        },
+        {
+            "id": "demo-2",
+            "text": "What's the latency tradeoff between SSE and WebSockets for AI streaming?",
+        },
+        {
+            "id": "demo-3",
+            "text": "When does a memoization cache stop paying for its memory cost?",
+        },
     ]
 
     print(f"Running async batch pipeline ({len(items)} items, max_concurrency=3)...\n")
     results = await arun_batch(items, config, personas=[persona], max_concurrency=3)
 
     for result in results:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Item: {result.item_id}")
         print(f"Score: {result.score}")
         print(f"Persona: {result.persona}")

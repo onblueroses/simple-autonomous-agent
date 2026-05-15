@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 import time
+from typing import TypedDict
 
 from . import llm
 from .config import AsyncPipelineConfig, PipelineConfig, PipelineResult
@@ -18,7 +19,26 @@ from .persona import Persona, build_system_prompt
 from .quality import default_rules, sanitize_input, validate_output
 from .state import StateStore
 
+
+class _RetryKwargs(TypedDict):
+    max_retries: int
+    retry_base_delay: float
+
+
 _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
+_SMART_QUOTES = str.maketrans(
+    {"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"}
+)
+_LINE_COMMENT_RE = re.compile(r"(^|[\s,{\[])//[^\n]*", re.MULTILINE)
+_TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
+
+
+def _sanitize_json_text(s: str) -> str:
+    """Strip common LLM JSON defects: smart quotes, // line comments, trailing commas."""
+    s = s.translate(_SMART_QUOTES)
+    s = _LINE_COMMENT_RE.sub(r"\1", s)
+    s = _TRAILING_COMMA_RE.sub(r"\1", s)
+    return s
 
 
 def _extract_json(text: str) -> str:
@@ -26,10 +46,10 @@ def _extract_json(text: str) -> str:
 
     fence_match = _FENCED_JSON_RE.search(text)
     if fence_match:
-        return fence_match.group(1).strip()
+        return _sanitize_json_text(fence_match.group(1).strip())
 
     if text.startswith("{") or text.startswith("["):
-        return text
+        return _sanitize_json_text(text)
 
     brace_idx = text.find("{")
     if brace_idx != -1:
@@ -54,7 +74,7 @@ def _extract_json(text: str) -> str:
             elif c == "}":
                 depth -= 1
                 if depth == 0:
-                    return text[brace_idx : i + 1]
+                    return _sanitize_json_text(text[brace_idx : i + 1])
 
     return text
 
@@ -69,7 +89,9 @@ def _resolve_persona(raw: str, personas: list[Persona]) -> Persona | None:
 
 
 def _build_reason_prompt(text: str, grounding: str) -> str:
-    parts = ["Analyze this content. Identify the core question, relevant facts, and what a response should address."]
+    parts = [
+        "Analyze this content. Identify the core question, relevant facts, and what a response should address."
+    ]
     if grounding:
         parts.append(f"\n<context>\n{grounding}\n</context>")
     parts.append(f"\n<content>\n{text}\n</content>")
@@ -83,7 +105,9 @@ def _build_draft_prompt(reasoning: str, grounding: str, text: str) -> str:
     if grounding:
         parts.append(f"<research>\n{grounding}\n</research>")
     parts.append(f"<content>\n{text}\n</content>")
-    parts.append("\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above.")
+    parts.append(
+        "\nWrite a response. Be direct and specific. Use concrete details from the analysis and research above."
+    )
     return "\n".join(parts)
 
 
@@ -103,7 +127,9 @@ def _validate_and_persist(
         try:
             state.save_item(result.item_id, item, result.score)
             if result.draft:
-                state.save_draft(result.item_id, result.persona or "default", result.draft)
+                state.save_draft(
+                    result.item_id, result.persona or "default", result.draft
+                )
                 state.update_item_status(result.item_id, "drafted")
         except Exception as e:
             errors.append(f"persistence: {e}")
@@ -123,7 +149,9 @@ def _init_pipeline(
     )
 
 
-def _apply_persona(selected: Persona | None, personas: list[Persona] | None, result: PipelineResult) -> Persona | None:
+def _apply_persona(
+    selected: Persona | None, personas: list[Persona] | None, result: PipelineResult
+) -> Persona | None:
     """Fall back to first persona if selection failed, then record on result."""
     if not selected and personas:
         selected = personas[0]
@@ -151,12 +179,17 @@ def run_pipeline(
     personas: list[Persona] | None = None,
 ) -> PipelineResult:
     result, errors, text = _init_pipeline(item, config)
-    retry = dict(max_retries=config.max_retries, retry_base_delay=config.retry_base_delay)
+    retry: _RetryKwargs = {
+        "max_retries": config.max_retries,
+        "retry_base_delay": config.retry_base_delay,
+    }
 
     # Score
     try:
         score_prompt = config.scorer_prompt_template.replace("{content}", text)
-        result.score = _parse_score(llm.score(config.scorer_client, score_prompt, config.scorer, **retry))
+        result.score = _parse_score(
+            llm.score(config.scorer_client, score_prompt, config.scorer, **retry)
+        )
     except Exception as e:
         errors.append(f"scoring: {e}")
         result.score = 0.0
@@ -169,8 +202,13 @@ def run_pipeline(
     if personas and len(personas) > 1:
         try:
             names = ", ".join(p.name for p in personas)
-            select_prompt = config.persona_select_prompt_template.replace("{personas}", names).replace("{content}", text)
-            selected = _resolve_persona(llm.score(config.scorer_client, select_prompt, config.scorer, **retry), personas)
+            select_prompt = config.persona_select_prompt_template.replace(
+                "{personas}", names
+            ).replace("{content}", text)
+            selected = _resolve_persona(
+                llm.score(config.scorer_client, select_prompt, config.scorer, **retry),
+                personas,
+            )
         except Exception as e:
             errors.append(f"persona selection: {e}")
     selected = _apply_persona(selected, personas, result)
@@ -184,14 +222,29 @@ def run_pipeline(
 
     # Reason
     try:
-        result.reasoning = llm.reason(config.writer_client, _build_reason_prompt(text, result.grounding), config.reasoner, **retry)
+        result.reasoning = llm.reason(
+            config.writer_client,
+            _build_reason_prompt(text, result.grounding),
+            config.reasoner,
+            **retry,
+        )
     except Exception as e:
         errors.append(f"reasoning: {e}")
 
     # Draft
     try:
-        system_prompt = build_system_prompt(selected) if selected else "You are a knowledgeable writer. Be direct and specific."
-        result.draft = llm.draft(config.writer_client, system_prompt, _build_draft_prompt(result.reasoning, result.grounding, text), config.writer, **retry)
+        system_prompt = (
+            build_system_prompt(selected)
+            if selected
+            else "You are a knowledgeable writer. Be direct and specific."
+        )
+        result.draft = llm.draft(
+            config.writer_client,
+            system_prompt,
+            _build_draft_prompt(result.reasoning, result.grounding, text),
+            config.writer,
+            **retry,
+        )
     except Exception as e:
         errors.append(f"drafting: {e}")
 
@@ -231,12 +284,17 @@ async def arun_pipeline(
     personas: list[Persona] | None = None,
 ) -> PipelineResult:
     result, errors, text = _init_pipeline(item, config)
-    retry = dict(max_retries=config.max_retries, retry_base_delay=config.retry_base_delay)
+    retry: _RetryKwargs = {
+        "max_retries": config.max_retries,
+        "retry_base_delay": config.retry_base_delay,
+    }
 
     # Score
     try:
         score_prompt = config.scorer_prompt_template.replace("{content}", text)
-        result.score = _parse_score(await llm.ascore(config.scorer_client, score_prompt, config.scorer, **retry))
+        result.score = _parse_score(
+            await llm.ascore(config.scorer_client, score_prompt, config.scorer, **retry)
+        )
     except Exception as e:
         errors.append(f"scoring: {e}")
         result.score = 0.0
@@ -249,8 +307,15 @@ async def arun_pipeline(
     if personas and len(personas) > 1:
         try:
             names = ", ".join(p.name for p in personas)
-            select_prompt = config.persona_select_prompt_template.replace("{personas}", names).replace("{content}", text)
-            selected = _resolve_persona(await llm.ascore(config.scorer_client, select_prompt, config.scorer, **retry), personas)
+            select_prompt = config.persona_select_prompt_template.replace(
+                "{personas}", names
+            ).replace("{content}", text)
+            selected = _resolve_persona(
+                await llm.ascore(
+                    config.scorer_client, select_prompt, config.scorer, **retry
+                ),
+                personas,
+            )
         except Exception as e:
             errors.append(f"persona selection: {e}")
     selected = _apply_persona(selected, personas, result)
@@ -264,14 +329,29 @@ async def arun_pipeline(
 
     # Reason
     try:
-        result.reasoning = await llm.areason(config.writer_client, _build_reason_prompt(text, result.grounding), config.reasoner, **retry)
+        result.reasoning = await llm.areason(
+            config.writer_client,
+            _build_reason_prompt(text, result.grounding),
+            config.reasoner,
+            **retry,
+        )
     except Exception as e:
         errors.append(f"reasoning: {e}")
 
     # Draft
     try:
-        system_prompt = build_system_prompt(selected) if selected else "You are a knowledgeable writer. Be direct and specific."
-        result.draft = await llm.adraft(config.writer_client, system_prompt, _build_draft_prompt(result.reasoning, result.grounding, text), config.writer, **retry)
+        system_prompt = (
+            build_system_prompt(selected)
+            if selected
+            else "You are a knowledgeable writer. Be direct and specific."
+        )
+        result.draft = await llm.adraft(
+            config.writer_client,
+            system_prompt,
+            _build_draft_prompt(result.reasoning, result.grounding, text),
+            config.writer,
+            **retry,
+        )
     except Exception as e:
         errors.append(f"drafting: {e}")
 

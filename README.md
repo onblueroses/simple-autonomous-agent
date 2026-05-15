@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/onblueroses/simple-autonomous-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/onblueroses/simple-autonomous-agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/onblueroses/simple-autonomous-agent)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 ~1,000 lines of Python for building autonomous LLM agents that use different models for different jobs, ground themselves with real data before writing, and validate their own output.
 
@@ -48,22 +48,22 @@ from simple_agent import (
 client = create_client("https://openrouter.ai/api/v1", "your-key")
 
 config = PipelineConfig(
-    scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
-    reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
-    writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
+    scorer=ModelConfig("nvidia/nemotron-nano-9b-v2:free", max_tokens=256),
+    reasoner=ModelConfig("deepseek/deepseek-v4-flash:free", max_tokens=1024),
+    writer=ModelConfig("google/gemma-4-31b-it:free", max_tokens=1024),
     scorer_client=client,
     writer_client=client,
     score_threshold=0.6,
 )
 
 persona = load_persona("personas/analyst.yaml")
-item = {"id": "1", "text": "What's a realistic rental yield in Berlin in 2026?"}
+item = {"id": "1", "text": "How do open-source dependency audit tools compare on signal-to-noise?"}
 
 result = run_pipeline(item, config, personas=[persona])
 print(result.draft)
 ```
 
-Three models for three jobs: a 12B for scoring (pennies per thousand calls), a thinking model for analysis, a writer for the actual output.
+Three models for three jobs: a small one for scoring (pennies per thousand calls), a long-context model for analysis, a stronger one for the actual draft. Model IDs are OpenRouter free-tier as of 2026-05-15; swap for any OpenAI-compatible provider.
 
 ## Why this instead of LangChain / CrewAI / AutoGen
 
@@ -90,9 +90,9 @@ from simple_agent import (
 client = acreate_client("https://openrouter.ai/api/v1", "your-key")
 
 config = AsyncPipelineConfig(
-    scorer=ModelConfig("google/gemma-3-12b-it:free", max_tokens=256),
-    reasoner=ModelConfig("deepseek/deepseek-r1:free", max_tokens=1024),
-    writer=ModelConfig("deepseek/deepseek-chat-v3-0324:free", max_tokens=1024),
+    scorer=ModelConfig("nvidia/nemotron-nano-9b-v2:free", max_tokens=256),
+    reasoner=ModelConfig("deepseek/deepseek-v4-flash:free", max_tokens=1024),
+    writer=ModelConfig("google/gemma-4-31b-it:free", max_tokens=1024),
     scorer_client=client,
     writer_client=client,
 )
