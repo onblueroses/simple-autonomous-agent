@@ -30,14 +30,19 @@ _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 _SMART_QUOTES = str.maketrans(
     {"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"}
 )
-_LINE_COMMENT_RE = re.compile(r"(^|[\s,{\[])//[^\n]*", re.MULTILINE)
+_LINE_COMMENT_RE = re.compile(r"(?m)^\s*//[^\n]*")
 _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
 
 def _sanitize_json_text(s: str) -> str:
-    """Strip common LLM JSON defects: smart quotes, // line comments, trailing commas."""
+    """Strip common LLM JSON defects: smart quotes, full-line // comments, trailing commas.
+
+    The line-comment stripper only removes lines that begin with `//` (after optional
+    whitespace). It deliberately does NOT touch `//` mid-line, since URLs and natural-
+    language strings containing `//` would be corrupted.
+    """
     s = s.translate(_SMART_QUOTES)
-    s = _LINE_COMMENT_RE.sub(r"\1", s)
+    s = _LINE_COMMENT_RE.sub("", s)
     s = _TRAILING_COMMA_RE.sub(r"\1", s)
     return s
 
