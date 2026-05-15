@@ -37,10 +37,11 @@ WRITER_MODEL = "google/gemma-4-31b-it:free"  # verified: 2026-05-15
 
 
 def ddg_search(query: str) -> str:
-    """Search DuckDuckGo and return text snippets. Zero dependencies beyond stdlib.
+    """DEMO ONLY. Scrapes DDG's HTML page and regex-parses snippets.
 
-    This is a basic implementation for demonstration. For production use,
-    consider Tavily (see comment block below) or another search API.
+    The HTML structure is undocumented and changes without notice; expect this
+    to break. For production grounding, plug in Tavily, SerpAPI, or Brave Search.
+    See the commented Tavily block below as a starting template.
     """
     url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query})
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
