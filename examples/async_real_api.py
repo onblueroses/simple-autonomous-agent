@@ -38,7 +38,11 @@ WRITER_MODEL = "google/gemma-4-31b-it:free"  # verified: 2026-05-15
 
 
 def _ddg_search_sync(query: str) -> str:
-    """Blocking DuckDuckGo search. Called via asyncio.to_thread."""
+    """DEMO ONLY. Blocking DDG HTML scrape; called via asyncio.to_thread.
+
+    The HTML structure is undocumented and changes without notice. For
+    production grounding, plug in Tavily, SerpAPI, or Brave Search.
+    """
     url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query})
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     try:

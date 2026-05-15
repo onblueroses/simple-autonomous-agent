@@ -164,11 +164,131 @@ def default_rules() -> list[QualityRule]:
     return list(DEFAULT_RULES)
 
 
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_CAUSAL_CONNECTOR_RE = re.compile(r"(?i)\b(?:because|since|so|therefore|hence|thus)\b")
+
+
+def _sentence_word_counts(text: str) -> list[int]:
+    return [len(s.split()) for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s.strip()]
+
+
+def _burstiness_violations(text: str) -> list[str]:
+    """Flag 5-sentence windows with no short (<8 words) AND no long (>20 words) sentence.
+
+    Real human prose has bursty length distribution. AI prose tends toward uniformity.
+    """
+    counts = _sentence_word_counts(text)
+    out: list[str] = []
+    for i in range(len(counts) - 4):
+        window = counts[i : i + 5]
+        if not any(w < 8 for w in window) or not any(w > 20 for w in window):
+            out.append(f"sentences {i + 1}-{i + 5}: lengths {window}")
+    return out
+
+
+def _causal_connector_violations(text: str) -> list[str]:
+    """Flag any 200-word window with fewer than 1 causal connector.
+
+    AI text underuses 'because/since/so/therefore' by ~5x vs human baseline.
+    """
+    tokens = text.split()
+    if len(tokens) < 200:
+        return []
+    out: list[str] = []
+    step = 100
+    for start in range(0, len(tokens) - 199, step):
+        window = " ".join(tokens[start : start + 200])
+        if len(_CAUSAL_CONNECTOR_RE.findall(window)) < 1:
+            out.append(f"words {start + 1}-{start + 200}: 0 causal connectors")
+    return out
+
+
+# Sentinels used as the QualityRule pattern slot; the dispatch in check_quality
+# routes by rule name to a real function.
+_STATISTICAL_SENTINEL = r"(?!x)x"
+
+
+def statistical_rules() -> list[QualityRule]:
+    """Opt-in statistical rules. Slower than regex; not included in DEFAULT_RULES.
+
+    Use when you have ~200+ words of output and want metrics beyond pattern matching.
+    """
+    return [
+        QualityRule(
+            "burstiness_check",
+            _STATISTICAL_SENTINEL,
+            "Sentence-length distribution is uniformly bland (AI signature).",
+        ),
+        QualityRule(
+            "causal_connector_ratio",
+            _STATISTICAL_SENTINEL,
+            "Under-uses 'because/since/so/therefore' vs human baseline.",
+        ),
+    ]
+
+
+def default_rules_de() -> list[QualityRule]:
+    """Generic German AI-tell rules. Opt-in; not included in DEFAULT_RULES.
+
+    All patterns are language-level (not domain-specific). Suitable for any
+    German content; tune for your corpus.
+    """
+    return [
+        QualityRule(
+            "de_eroeffnungsformel",
+            r"(?im)^\s*(?:in der heutigen|in einer welt,|stell dir vor,)",
+            "Generic German LLM opening formula.",
+        ),
+        QualityRule(
+            "de_schlussformel",
+            r"(?i)(?:fazit:|zusammenfassend|abschlie\u00dfend l\u00e4sst sich)",
+            "Generic German LLM closing formula.",
+        ),
+        QualityRule(
+            "de_orientiert_basiert",
+            r"\b\w+(?:orientiert|basiert)\w*\b",
+            "-orientiert/-basiert Komposita overused in German LLM output.",
+        ),
+        QualityRule(
+            "de_genitivkette",
+            r"\b\w+s\s+\w+s\s+\w+s\b",
+            "Three+ chained genitives reads as machine-translated.",
+        ),
+        QualityRule(
+            "de_nominalisierung",
+            r"\b\w+(?:ung|heit|keit|tät)\b.{1,40}\b\w+(?:ung|heit|keit|tät)\b.{1,40}\b\w+(?:ung|heit|keit|tät)\b",
+            "Three+ abstract nominalizations in close proximity.",
+        ),
+        QualityRule(
+            "de_dreierregel",
+            r"(?i)\b\w+,\s+\w+\s+und\s+\w+\b",
+            "Tight three-item enumeration; check for AI rule-of-three.",
+        ),
+        QualityRule(
+            "de_anglizismus_buzz",
+            r"(?i)\b(?:game[-\s]?changer|next[-\s]?level|key[-\s]?learnings?|state[-\s]?of[-\s]?the[-\s]?art)\b",
+            "English buzz-phrases dropped into German LLM output.",
+        ),
+    ]
+
+
+_STATISTICAL_DISPATCH = {
+    "burstiness_check": _burstiness_violations,
+    "causal_connector_ratio": _causal_connector_violations,
+}
+
+
 def check_quality(text: str, rules: list[QualityRule]) -> list[Violation]:
     violations: list[Violation] = []
     for rule in rules:
         if rule.name == "em_dash":
             for matched in _em_dash_violations(text):
+                violations.append(
+                    Violation(rule=rule.name, matched=matched, severity=rule.severity)
+                )
+            continue
+        if rule.name in _STATISTICAL_DISPATCH:
+            for matched in _STATISTICAL_DISPATCH[rule.name](text):
                 violations.append(
                     Violation(rule=rule.name, matched=matched, severity=rule.severity)
                 )
