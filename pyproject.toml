@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "simple-autonomous-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Multi-model LLM orchestration and output quality engineering in ~1,000 lines"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 keywords = ["llm", "agents", "openai", "pipeline", "automation"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
