@@ -71,9 +71,23 @@ def _schema_for(annotation: Any, fn_name: str, p_name: str) -> dict:
     )
 
 
+def _tool_name(fn: Callable) -> str:
+    name = getattr(fn, "__name__", None)
+    if name:
+        return name
+    unwrapped = _unwrap_for_hints(fn)
+    name = getattr(unwrapped, "__name__", None)
+    if name:
+        return name
+    raise TypeError(
+        f"Tool {fn!r} has no __name__. Wrap it in a def or assign __name__ explicitly."
+    )
+
+
 def tool_spec(fn: Callable) -> dict:
     """Build an OpenAI tool spec dict for a single callable (D4, D9)."""
     sig = inspect.signature(fn)
+    name = _tool_name(fn)
     try:
         hints = typing.get_type_hints(_unwrap_for_hints(fn))
     except Exception:
@@ -88,10 +102,10 @@ def tool_spec(fn: Callable) -> dict:
             continue
         if p_name not in hints:
             raise TypeError(
-                f"Tool {fn.__name__!r} parameter {p_name!r} has no type annotation."
+                f"Tool {name!r} parameter {p_name!r} has no type annotation."
             )
         annotation = hints[p_name]
-        properties[p_name] = _schema_for(annotation, fn.__name__, p_name)
+        properties[p_name] = _schema_for(annotation, name, p_name)
         is_opt, _ = _split_optional(annotation)
         if param.default is inspect.Parameter.empty and not is_opt:
             required.append(p_name)
@@ -104,7 +118,7 @@ def tool_spec(fn: Callable) -> dict:
     return {
         "type": "function",
         "function": {
-            "name": fn.__name__,
+            "name": name,
             "description": description,
             "parameters": {
                 "type": "object",

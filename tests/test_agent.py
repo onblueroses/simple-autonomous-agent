@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from types import SimpleNamespace
 from typing import Optional
 from unittest.mock import MagicMock, patch
@@ -89,6 +90,15 @@ class TestToolSpec:
 
         with pytest.raises(TypeError, match="not supported"):
             tool_spec(f)
+
+    def test_partial_without_dunder_name_uses_underlying(self):
+        def underlying(x: int) -> int:
+            """Underlying tool."""
+            return x
+
+        wrapped = functools.partial(underlying)
+        spec = tool_spec(wrapped)
+        assert spec["function"]["name"] == "underlying"
 
     def test_description_from_docstring_first_line(self):
         def f(a: int) -> str:
