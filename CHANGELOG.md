@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-16
+
+### Fixed
+- `tool_spec()` no longer raises `AttributeError` when given a bare
+  `functools.partial` tool. The tool name is derived from the underlying
+  function via `_unwrap_for_hints`. Documented async-section claim about
+  partial-wrapped tools now matches the actual behavior.
+
 ## [0.3.0] - 2026-05-16
 
 ### Added

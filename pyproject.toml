@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "simple-autonomous-agent"
-version = "0.3.0"
+version = "0.3.1"
 description = "Minimal Agent + multi-model LLM pipeline in ~1,300 lines"
 readme = "README.md"
 license = "Apache-2.0"

@@ -121,9 +121,8 @@ class TestAsyncToolDispatch:
             return x + 100
 
         wrapped = functools.partial(underlying)
-        wrapped.__name__ = "wrapped"  # type: ignore[attr-defined]
         c = _async_client(
-            _resp(tool_calls=[_tc("c", "wrapped", '{"x": 5}')]),
+            _resp(tool_calls=[_tc("c", "underlying", '{"x": 5}')]),
             _resp(content="105"),
         )
         agent = AsyncAgent(client=c, model="m", tools=[wrapped])
