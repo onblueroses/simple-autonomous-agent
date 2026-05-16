@@ -26,6 +26,7 @@ PAIRS = [
     ("simple_agent/llm.py", "_retry_llm_call", "_async_retry_llm_call"),
     ("simple_agent/pipeline.py", "run_pipeline", "arun_pipeline"),
     ("simple_agent/pipeline.py", "run_batch", "arun_batch"),
+    ("simple_agent/agent.py", "run", "arun"),
 ]
 
 
