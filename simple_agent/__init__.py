@@ -1,3 +1,4 @@
+from .agent import Agent, AgentResult, AsyncAgent, tool_spec
 from .config import AsyncPipelineConfig, ModelConfig, PipelineConfig, PipelineResult
 from .llm import (
     acreate_client,
@@ -23,6 +24,10 @@ from .state import StateStore
 from .versioning import compute_prompt_hash
 
 __all__ = [
+    "Agent",
+    "AsyncAgent",
+    "AgentResult",
+    "tool_spec",
     "ModelConfig",
     "PipelineConfig",
     "AsyncPipelineConfig",
