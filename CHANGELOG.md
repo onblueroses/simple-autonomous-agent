@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-16
+
+### Added
+- `simple_agent.Agent` and `simple_agent.AsyncAgent` — minimal tool-calling loops
+  wrapping any OpenAI-compatible client. Tools are plain callables; the OpenAI
+  tool spec is auto-derived from type hints (`str`, `int`, `float`, `bool`,
+  `list[T]`, `Optional[T]`, `T | None`). Memory is caller-owned and mutated in
+  place. Termination reasons: `"done"`, `"max_steps"`, `"no_progress"`. Tool
+  errors become observations so the loop can recover. Sync `Agent` rejects
+  awaitable tool results; `AsyncAgent` awaits them.
+- `simple_agent.AgentResult` — dataclass with `output`, `messages`, `steps`,
+  `terminated`.
+- `simple_agent.tool_spec(fn)` — public helper that returns the OpenAI tool
+  spec for a single callable. Useful for introspection and composition.
+- `examples/agent_real_api.py` — Agent loop with a sandboxed arithmetic
+  evaluator (AST walker, no `eval`/`exec`) and a constant lookup table.
+- `tests/test_agent.py` and `tests/test_agent_async.py` — 43 new tests covering
+  schema derivation, tool dispatch, memory, retries, and termination.
+
+### Changed
+- `README.md` repositioned around the Agent class. The content pipeline is now
+  documented under "Specialized: Content Pipeline"; all v0.2.0 pipeline
+  content is preserved.
+- `scripts/check_dedup.py` PAIRS list extended with the new `run`/`arun` pair;
+  dedup gate now enforces parity across 7 sync/async pairs.
+- `tests/test_api_contract.py` `_ALLOWED_NEW_EXPORTS` widened to admit
+  `Agent`, `AsyncAgent`, `AgentResult`, `tool_spec`. The v0.2.0 baseline at
+  `tests/_api_baseline.json` is unchanged; all 27 pre-existing signatures
+  remain backwards compatible.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added

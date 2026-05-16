@@ -14,7 +14,13 @@ import simple_agent
 
 
 _BASELINE_PATH = pathlib.Path(__file__).parent / "_api_baseline.json"
-_ALLOWED_NEW_EXPORTS = {"compute_prompt_hash"}
+_ALLOWED_NEW_EXPORTS = {
+    "compute_prompt_hash",
+    "Agent",
+    "AsyncAgent",
+    "AgentResult",
+    "tool_spec",
+}
 
 
 def _parameter_names_in_order(obj) -> list[str]:
